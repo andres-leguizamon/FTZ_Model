@@ -173,13 +173,49 @@ class BienExcluido(Good):
 
 
 # ---------------------- Clase Inventario -------------------------
+"""
+
+Modalidades de exportacion 
+
+D :  Definitiva 
+
+T: Temporal 
+"""
+
+"""
+
+Origen 
+
+Empresa que envia el bien 
+
+"""
 
 
 class Lote:
-    def __init__(self, good: Good, quantity: float, unit_cost: float):
+    def __init__(
+        self,
+        good: Good,
+        quantity: float,
+        unit_cost: float,
+        modalidad: str = "D",
+        origen: str = None,
+        involucrado_expo_temporal: int = 0,
+    ):
+        """
+        Initializes a new batch (lote) of goods for inventory management.
+
+        :param good: The good associated with this batch.
+        :param quantity: The quantity of the good in the batch.
+        :param unit_cost: The cost per unit of the good.
+        :param modalidad: The modality of the batch (default is 'D' for definitive). Options include 'definitiva', 'temporal', etc.
+        :param origen: Name of the agent that sent the batch (default is None).
+        """
         self.good = good
         self.quantity = quantity
         self.unit_cost = unit_cost
+        self.modalidad = modalidad  # 'definitiva', 'temporal', etc.
+        self.origen = origen  # Name of the agent that sent the batch (default is None).
+        self.involucrado_expo_temporal = bool(involucrado_expo_temporal)
 
 
 class Inventory:
@@ -197,17 +233,65 @@ class Inventory:
             )
         self.costing_methods[good_name] = method
 
-    def add_lote(self, good: Good, quantity: float, unit_cost: float):
+    def add_lote(
+        self,
+        good: Good,
+        quantity: float,
+        unit_cost: float,
+        modalidad: str = "definitiva",
+        origen: str = "local",
+    ):
+        """
+        Agrega un nuevo lote al inventario.
+
+        :param good: El bien correspondiente al lote.
+        :param quantity: La cantidad del lote.
+        :param unit_cost: El costo unitario del lote.
+        :param modalidad: La modalidad del lote (definitiva, temporal, etc.).
+        :param origen: El origen del lote (NCT, ZF, etc.).
+        """
+
         if good.name not in self.lotes:
             self.lotes[good.name] = []
 
-        # Agregar un nuevo lote al inventario
-        self.lotes[good.name].append(Lote(good, quantity, unit_cost))
+        # Agregar un nuevo lote al inventario con modalidad y origen
+        self.lotes[good.name].append(Lote(good, quantity, unit_cost, modalidad, origen))
 
-    def remove_lote(self, good_name: str, quantity: float):
+    def remove_lote(
+        self,
+        good_name: str,
+        quantity: float,
+        modalidad: str = None,
+        origen: str = None,
+    ):
+        """
+        Retira una cantidad específica de un bien del inventario, teniendo en cuenta la modalidad y el origen si se proporcionan.
+
+        :param good_name: El nombre del bien a retirar.
+        :param quantity: La cantidad a retirar.
+        :param modalidad: La modalidad del lote (definitiva, temporal, etc.) opcional.
+        :param origen: El origen del lote (NCT, ZF, etc.) opcional.
+        :return: El costo total de los bienes retirados.
+        """
         if good_name not in self.lotes or not self.lotes[good_name]:
             raise ValueError(
                 f"No hay suficiente inventario de {good_name} para retirar."
+            )
+
+        # Filtrar los lotes según la modalidad y el origen si se proporcionan
+        lotes_disponibles = self.lotes[good_name]
+        if modalidad:
+            lotes_disponibles = [
+                lote for lote in lotes_disponibles if lote.modalidad == modalidad
+            ]
+        if origen:
+            lotes_disponibles = [
+                lote for lote in lotes_disponibles if lote.origen == origen
+            ]
+
+        if not lotes_disponibles:
+            raise ValueError(
+                f"No hay lotes disponibles de {good_name} con los criterios especificados."
             )
 
         method = self.costing_methods.get(good_name, "FIFO")
@@ -215,59 +299,118 @@ class Inventory:
         quantity_to_remove = quantity
 
         if method == "FIFO":
-            while quantity_to_remove > 0 and self.lotes[good_name]:
-                first_lote = self.lotes[good_name][0]
+            lotes = lotes_disponibles.copy()
+            while quantity_to_remove > 0 and lotes:
+                first_lote = lotes[0]
                 if first_lote.quantity <= quantity_to_remove:
                     total_cost += first_lote.quantity * first_lote.unit_cost
                     quantity_to_remove -= first_lote.quantity
-                    self.lotes[good_name].pop(0)
+                    self.lotes[good_name].remove(first_lote)
+                    lotes.pop(0)
                 else:
                     total_cost += quantity_to_remove * first_lote.unit_cost
                     first_lote.quantity -= quantity_to_remove
                     quantity_to_remove = 0
 
         elif method == "LIFO":
-            while quantity_to_remove > 0 and self.lotes[good_name]:
-                last_lote = self.lotes[good_name][-1]
+            lotes = lotes_disponibles.copy()
+            while quantity_to_remove > 0 and lotes:
+                last_lote = lotes[-1]
                 if last_lote.quantity <= quantity_to_remove:
                     total_cost += last_lote.quantity * last_lote.unit_cost
                     quantity_to_remove -= last_lote.quantity
-                    self.lotes[good_name].pop()
+                    self.lotes[good_name].remove(last_lote)
+                    lotes.pop()
                 else:
                     total_cost += quantity_to_remove * last_lote.unit_cost
                     last_lote.quantity -= quantity_to_remove
                     quantity_to_remove = 0
 
         elif method == "WeightedAverage":
-            total_quantity = sum(lote.quantity for lote in self.lotes[good_name])
+            total_quantity = sum(lote.quantity for lote in lotes_disponibles)
             if total_quantity < quantity:
                 raise ValueError(
                     f"No hay suficiente inventario de {good_name} para retirar."
                 )
 
             average_cost = (
-                sum(lote.quantity * lote.unit_cost for lote in self.lotes[good_name])
+                sum(lote.quantity * lote.unit_cost for lote in lotes_disponibles)
                 / total_quantity
             )
             total_cost = quantity * average_cost
-            self._reduce_inventory(good_name, quantity)
+            self._reduce_inventory(
+                good_name, quantity, modalidad=modalidad, origen=origen
+            )
+
+        if quantity_to_remove > 0:
+            raise ValueError(f"No hay suficiente cantidad de {good_name} para retirar.")
 
         return total_cost
 
-    def _reduce_inventory(self, good_name: str, quantity: float):
-        """Método auxiliar para reducir el inventario sin calcular costos."""
+    def _reduce_inventory(
+        self, good_name: str, quantity: float, modalidad: str = None, origen: str = None
+    ):
+        """Método auxiliar para reducir el inventario sin calcular costos, teniendo en cuenta modalidad y origen."""
         quantity_to_remove = quantity
-        while quantity_to_remove > 0 and self.lotes[good_name]:
-            first_lote = self.lotes[good_name][0]
+
+        # Filtrar los lotes según la modalidad y el origen si se proporcionan
+        lotes_disponibles = self.lotes[good_name]
+        if modalidad:
+            lotes_disponibles = [
+                lote for lote in lotes_disponibles if lote.modalidad == modalidad
+            ]
+        if origen:
+            lotes_disponibles = [
+                lote for lote in lotes_disponibles if lote.origen == origen
+            ]
+
+        lotes = lotes_disponibles.copy()
+
+        while quantity_to_remove > 0 and lotes:
+            first_lote = lotes[0]
             if first_lote.quantity <= quantity_to_remove:
                 quantity_to_remove -= first_lote.quantity
-                self.lotes[good_name].pop(0)
+                self.lotes[good_name].remove(first_lote)
+                lotes.pop(0)
             else:
                 first_lote.quantity -= quantity_to_remove
                 quantity_to_remove = 0
 
-    def get_total_quantity(self, good_name: str) -> float:
-        return sum(lote.quantity for lote in self.lotes.get(good_name, []))
+        if quantity_to_remove > 0:
+            raise ValueError(f"No hay suficiente cantidad de {good_name} para retirar.")
+
+    def get_total_quantity(
+        self, good_name: str, modalidad: str = None, origen: str = None
+    ) -> float:
+        """
+        Calcula el total de cantidad disponible de un bien específico en el inventario, opcionalmente filtrado por modalidad y origen.
+
+        :param good_name: El nombre del bien para el cual se desea obtener la cantidad total.
+        :param modalidad: La modalidad de los lotes a considerar (opcional).
+        :param origen: El origen de los lotes a considerar (opcional).
+        :return: La suma de las cantidades de todos los lotes disponibles para el bien especificado.
+        """
+        lotes = self.lotes.get(good_name, [])
+        if modalidad:
+            lotes = [lote for lote in lotes if lote.modalidad == modalidad]
+        if origen:
+            lotes = [lote for lote in lotes if lote.origen == origen]
+        return sum(lote.quantity for lote in lotes)
+
+    def get_lotes_by_modalidad(self, good_name: str, modalidad: str) -> List["Lote"]:
+        """
+        Filtra los lotes de un bien específico según la modalidad especificada.
+
+        :param good_name: El nombre del bien para el cual se desea obtener los lotes.
+        :param modalidad: La modalidad según la cual se desean filtrar los lotes.
+        :return: Una lista de lotes que coinciden con la modalidad especificada.
+        """
+
+        return [
+            lote
+            for lote in self.lotes.get(good_name, [])
+            if lote.modalidad == modalidad
+        ]
 
 
 # ---------------------- Clase Agent ------------------------------
@@ -458,10 +601,18 @@ class Transaction:
 
 ### --------------------- Clase Production ------------------------------
 
+"""
+Modalidades de Produccion 
+
+P : Produccion
+T: Transformacion 
+
+"""
+
 
 class Production:
     """
-    Clase para manejar operaciones de produccion
+    Clase para manejar operaciones de producción y transformación.
     """
 
     def __init__(
@@ -469,14 +620,21 @@ class Production:
         producer: Agent,
         good: Good,
         amount_good: float,
-        inputs: Dict[str, float],
+        inputs: List[Good],
+        modalidad: str = "P",  # 'producción' o 'transformación'
     ):
         """
-        Inicializa una nueva operaci n de producci n.
+        Constructor para definir un proceso de producción o transformación.
 
-        :param producer: El agente que produce el bien.
-        :param good: El bien que se est  produciendo.
-        :param amount_good: La cantidad del bien que se va a producir.
-        :param inputs: Un diccionario con los insumos necesarios para producir el bien.
-                        Las claves son los nombres de los insumos y los valores son las cantidades requeridas.
+        Parámetros:
+        - producer: Agente que produce o transforma el bien.
+        - good: Objeto del tipo Good, que representa el bien producido o transformado.
+        - amount_good: Cantidad del bien que se quiere producir o transformar (float).
+        - inputs: Lista de insumos que se van a usar para producir o transformar el bien (List[Good]).
+        - modalidad: Tipo de proceso ('producción' o 'transformación').
         """
+        self.producer = producer
+        self.good = good
+        self.amount_good = amount_good
+        self.inputs = inputs
+        self.modalidad = modalidad
