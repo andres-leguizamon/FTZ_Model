@@ -1,6 +1,6 @@
 #! Script para realizar la calculadora
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from abc import ABC, abstractmethod
 
 from utils import cargar_plantillas_cuentas
@@ -117,9 +117,7 @@ class Good(ABC):
         """
         self.name = name
         self.price = price
-        self.tariff = tariff
         self.insumos = insumos if insumos is not None else {}
-        self.grado_insumo = 0  # 0: Materia Prima, 1: Bien Intermedio, 2: Bien Final
         self.tipo_bien = None  # "materia prima", "intermedio", "final"
 
     def asignar_tipo_bien(self, bienes_dict, usados_como_insumo):
@@ -145,156 +143,7 @@ class Good(ABC):
         return f"{self.name} ({self.tipo_bien})"
 
 
-class BienGravado(Good):
-    """
-    Clase para bienes gravados.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        price: float,
-        iva_rate: float,
-        tariff: float,
-        insumos: Dict[str, float] = None,
-    ):
-        super().__init__(name, price, tariff, insumos)
-        self.iva_rate = iva_rate
-        self.status_iva = "gravado"
-
-
-class BienExento(Good):
-    """
-    Clase para bienes exentos.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        price: float,
-        tariff: float,
-        insumos: Dict[str, float] = None,
-    ):
-        super().__init__(name, price, tariff, insumos)
-        self.iva_rate = 0  # Un bien exento tiene tasa de IVA 0%
-        self.status_iva = "exento"
-
-
-class BienExcluido(Good):
-    """
-    Clase para bienes excluidos.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        price: float,
-        insumos: Dict[str, float] = None,
-    ):
-        super().__init__(name, price, tariff=0, insumos=insumos)
-        self.iva_rate = 0  # Un bien excluido no está gravado con IVA
-        self.status_iva = "excluido"
-
-
-# ---------------------- Clase Inventario -------------------------
-
-
-class Lote:
-    def __init__(self, good: Good, quantity: float, unit_cost: float):
-        self.good = good
-        self.quantity = quantity
-        self.unit_cost = unit_cost
-
-
-class Inventory:
-    def __init__(self):
-        # Diccionario para almacenar listas de lotes por bien
-        self.lotes = {}
-
-        # Diccionario para almacenar el método de costeo por bien
-        self.costing_methods = {}
-
-    def set_costing_method(self, good_name: str, method: str):
-        if method not in ["FIFO", "LIFO", "WeightedAverage"]:
-            raise ValueError(
-                "Método de costeo inválido. Debe ser 'FIFO', 'LIFO' o 'WeightedAverage'."
-            )
-        self.costing_methods[good_name] = method
-
-    def add_lote(self, good: Good, quantity: float, unit_cost: float):
-        if good.name not in self.lotes:
-            self.lotes[good.name] = []
-
-        # Agregar un nuevo lote al inventario
-        self.lotes[good.name].append(Lote(good, quantity, unit_cost))
-
-    def remove_lote(self, good_name: str, quantity: float):
-        if good_name not in self.lotes or not self.lotes[good_name]:
-            raise ValueError(
-                f"No hay suficiente inventario de {good_name} para retirar."
-            )
-
-        method = self.costing_methods.get(good_name, "FIFO")
-        total_cost = 0.0
-        quantity_to_remove = quantity
-
-        if method == "FIFO":
-            while quantity_to_remove > 0 and self.lotes[good_name]:
-                first_lote = self.lotes[good_name][0]
-                if first_lote.quantity <= quantity_to_remove:
-                    total_cost += first_lote.quantity * first_lote.unit_cost
-                    quantity_to_remove -= first_lote.quantity
-                    self.lotes[good_name].pop(0)
-                else:
-                    total_cost += quantity_to_remove * first_lote.unit_cost
-                    first_lote.quantity -= quantity_to_remove
-                    quantity_to_remove = 0
-
-        elif method == "LIFO":
-            while quantity_to_remove > 0 and self.lotes[good_name]:
-                last_lote = self.lotes[good_name][-1]
-                if last_lote.quantity <= quantity_to_remove:
-                    total_cost += last_lote.quantity * last_lote.unit_cost
-                    quantity_to_remove -= last_lote.quantity
-                    self.lotes[good_name].pop()
-                else:
-                    total_cost += quantity_to_remove * last_lote.unit_cost
-                    last_lote.quantity -= quantity_to_remove
-                    quantity_to_remove = 0
-
-        elif method == "WeightedAverage":
-            total_quantity = sum(lote.quantity for lote in self.lotes[good_name])
-            if total_quantity < quantity:
-                raise ValueError(
-                    f"No hay suficiente inventario de {good_name} para retirar."
-                )
-
-            average_cost = (
-                sum(lote.quantity * lote.unit_cost for lote in self.lotes[good_name])
-                / total_quantity
-            )
-            total_cost = quantity * average_cost
-            self._reduce_inventory(good_name, quantity)
-
-        return total_cost
-
-    def _reduce_inventory(self, good_name: str, quantity: float):
-        """Método auxiliar para reducir el inventario sin calcular costos."""
-        quantity_to_remove = quantity
-        while quantity_to_remove > 0 and self.lotes[good_name]:
-            first_lote = self.lotes[good_name][0]
-            if first_lote.quantity <= quantity_to_remove:
-                quantity_to_remove -= first_lote.quantity
-                self.lotes[good_name].pop(0)
-            else:
-                first_lote.quantity -= quantity_to_remove
-                quantity_to_remove = 0
-
-    def get_total_quantity(self, good_name: str) -> float:
-        return sum(lote.quantity for lote in self.lotes.get(good_name, []))
-
-
-# ---------------------- Clase Agent ------------------------------
+# -------------- Clase Agente ----------------
 
 
 class Agent(ABC):
@@ -306,9 +155,6 @@ class Agent(ABC):
         self,
         nombre: str,
         plantillas_cuentas: Dict,
-        bienes_vendidos: List,
-        bienes_producidos: List,
-        status_bienes: Dict[str, List[Good]],
     ):
         """
         Inicializa una nueva instancia de Agent.
@@ -334,55 +180,72 @@ class Agent(ABC):
             # Creamos una nueva instancia de Account para cada cuenta del agente
             self.cuentas[codigo] = Account(name=cuenta_nombre, tipo=codigo_tipo_cuenta)
 
-        self.bienes_vendidos = bienes_vendidos if bienes_vendidos else []
-
-        self.bienes_producidos = bienes_producidos if bienes_producidos else []
-
-        self.status_bienes = {}
-
-        # Inicializar el inventario
-        self.inventory = Inventory()
-
-    def set_costing_method_for_good(self, good_name: str, method: str):
+    def registrar_transaccion(
+        self,
+        es_venta: bool,
+        cuenta_debito_codigo: str,
+        cuenta_credito_codigo: str,
+        precio: float,
+    ):
         """
-        Establece el método de costeo para un bien específico en el inventario.
+        Registra una transacción contable en las cuentas del agente.
 
-        :param good_name: El nombre del bien para el cual se debe establecer el método de costeo.
-        :param method: El método de costeo a establecer. Debe ser 'FIFO', 'LIFO' o 'WeightedAverage'.
-        :raises ValueError: Si el método de costeo proporcionado no es válido.
+        :param otro_agente: El agente con quien se realiza la transacción.
+        :param bien: El bien que se transacciona.
+        :param es_venta: True si es una venta, False si es una compra.
+        :param cuenta_debito_codigo: Código de la cuenta a debitar.
+        :param cuenta_credito_codigo: Código de la cuenta a acreditar.
+        :param precio: Precio al cual se realiza la transacción.
         """
-        self.inventory.set_costing_method(good_name, method)
+        cuenta_debito = self.get_account_by_code(cuenta_debito_codigo)
+        cuenta_credito = self.get_account_by_code(cuenta_credito_codigo)
 
-    def purchase_good(self, good: Good, quantity: float, unit_cost: float):
+        if cuenta_debito is None or cuenta_credito is None:
+            raise ValueError("Código de cuenta no válido.")
+
+        if es_venta:
+            # Registro en las cuentas del vendedor
+            cuenta_debito.registrar_transaccion(debe=precio, haber=0)
+            cuenta_credito.registrar_transaccion(debe=0, haber=precio)
+        else:
+            # Registro en las cuentas del comprador
+            cuenta_debito.registrar_transaccion(debe=precio, haber=0)
+            cuenta_credito.registrar_transaccion(debe=0, haber=precio)
+
+    def producir_bien(
+        self,
+        bien_producido: Good,
+        insumo_utilizado: Good,
+        cuenta_debito_codigo: str,
+        cuenta_credito_codigo: str,
+        costo_produccion: float,
+    ):
         """
-        Compra un bien y lo agrega al inventario como un nuevo lote.
+        Registra el proceso de producción en las cuentas del agente.
 
-        :param good: El bien a comprar.
-        :param quantity: La cantidad comprada.
-        :param unit_cost: El costo unitario del bien.
+        :param bien_producido: El bien que se produce.
+        :param insumo_utilizado: El insumo utilizado en la producción.
+        :param cuenta_debito_codigo: Código de la cuenta a debitar.
+        :param cuenta_credito_codigo: Código de la cuenta a acreditar.
+        :param costo_produccion: Costo de producción del bien.
         """
-        # Registrar la compra en las cuentas contables si es necesario
-        # ...
+        cuenta_debito = self.get_account_by_code(cuenta_debito_codigo)
+        cuenta_credito = self.get_account_by_code(cuenta_credito_codigo)
 
-        # Agregar al inventario como un nuevo lote
-        self.inventory.add_lote(good, quantity, unit_cost)
+        if bien_producido is None or insumo_utilizado is None:
+            raise ValueError("Bien o insumo no válido.")
 
-    def sell_good(self, good_name: str, quantity: float, selling_price: float):
-        """
-        Vende una cantidad específica de un bien, actualiza el inventario y calcula el costo de los bienes vendidos.
+        if insumo_utilizado not in bien_producido.insumos:
+            raise ValueError("El insumo utilizado no es un insumo del bien producido.")
 
-        :param good_name: El nombre del bien a vender.
-        :param quantity: La cantidad a vender.
-        :param selling_price: El precio de venta por unidad.
-        """
-        # Calcular el costo de los bienes vendidos según el método de costeo
-        cost_of_goods_sold = self.inventory.remove_lote(good_name, quantity)
+        if cuenta_debito is None or cuenta_credito is None:
+            raise ValueError("Código de cuenta no válido.")
 
-        # Registrar la venta en las cuentas contables si es necesario
-        # ...
+        # Registrar salida del insumo
+        cuenta_credito.registrar_transaccion(debe=0, haber=costo_produccion)
 
-        # Retornar o almacenar el costo de los bienes vendidos si es necesario
-        return cost_of_goods_sold
+        # Registrar entrada del bien producido
+        cuenta_debito.registrar_transaccion(debe=costo_produccion, haber=0)
 
     @abstractmethod
     def get_type(self) -> str:
@@ -413,30 +276,6 @@ class Agent(ABC):
         """
         return self.cuentas.get(account_code, None)
 
-    def generar_directorio_insumos(self) -> Dict:
-        """
-        Genera un diccionario con los bienes y sus insumos.
-
-        :return: Un diccionario donde la clave es el nombre del bien y el valor es la lista de insumos.
-        """
-        directorio_insumos = {}
-        for bien in self.bienes_vendidos:
-            bien_name = bien.name
-            directorio_insumos[bien_name] = bien.insumos
-        return directorio_insumos
-
-    def get_good_status(self, good) -> str:
-        """
-        Determina el status de un bien respecto a la empresa.
-
-        :param good: Objeto de tipo Good.
-        :return: Estado del bien ('materia prima', 'intermedio', 'final', etc.) o 'independiente' si no aplica.
-        """
-        for status, goods in self.status_bienes.items():
-            if good in goods:
-                return status
-        return "no relacionado"
-
 
 # Subclase para empresas ZF
 class ZF(Agent):
@@ -450,73 +289,137 @@ class NCT(Agent):
         return "NCT"
 
 
-# ---------------------- Clase Transaction ------------------------------
-class Transaction:
-    """
-    Clase para manejar transacciones entre agentes
-    """
+# ------------------------------------ Clase Modelo  ------------------------------------
+
+
+class Modelo:
+    """Clase para representar el modelo de bienes y empresas."""
 
     def __init__(
         self,
-        seller: Agent,
-        buyer: Agent,
-        good: Good,
-        amount: float,
-        temporal_export: int,
-        national_VAT: int = 0,
-        iva_status_transaccion: str = "gravado",
+        lista_bienes: List[Good],
+        lista_agentes: List[Agent],
+        precios_transaccion: Dict[Tuple[str, str, str], float],
+    ):
+        self.lista_bienes = lista_bienes
+        self.lista_agentes = lista_agentes
+        self.precios_transaccion = (
+            precios_transaccion  # Diccionario para parametrizar precios
+        )
+
+    def obtener_precio_transaccion(
+        self, bien: Good, vendedor: Agent, comprador: Agent
+    ) -> float:
+        """
+        Determina el precio de transacción del bien según los parámetros definidos en precios_transaccion.
+
+        :param bien: Objeto Good que se va a transaccionar.
+        :param vendedor: Agente que vende el bien.
+        :param comprador: Agente que compra el bien.
+        :return: Precio ajustado del bien.
+        """
+        # Clave para acceder al diccionario de precios
+        key = (vendedor.type, comprador.type, bien.tipo_bien)
+        if key in self.precios_transaccion:
+            precio = self.precios_transaccion[key]
+        else:
+            # Si no se encuentra una regla específica, usar el precio base del bien
+            precio = bien.price
+        return precio
+
+    def realizar_trade(self, vendedor: Agent, comprador: Agent, bien: Good):
+        """
+        Realiza una transacción de venta de un bien entre dos agentes y actualiza sus cuentas.
+
+        :param vendedor: Agente que vende el bien.
+        :param comprador: Agente que compra el bien.
+        :param bien: El bien que se transacciona.
+        """
+        # Obtener el precio ajustado de la transacción
+        precio = self.obtener_precio_transaccion(bien, vendedor, comprador)
+
+        # Determinar las cuentas a afectar según el tipo de bien
+        # Debes ajustar estos códigos de cuenta según tus plantillas
+        cuentas_config = {
+            "materia prima": {
+                "venta": {"debito": "1105", "credito": "4135"},
+                "compra": {"debito": "1435", "credito": "2205"},
+            },
+            "intermedio": {
+                "venta": {"debito": "1106", "credito": "4140"},
+                "compra": {"debito": "1436", "credito": "2206"},
+            },
+            "final": {
+                "venta": {"debito": "1107", "credito": "4145"},
+                "compra": {"debito": "1437", "credito": "2207"},
+            },
+        }
+
+        tipo_bien = bien.tipo_bien
+        cuentas_vendedor = cuentas_config[tipo_bien]["venta"]
+        cuentas_comprador = cuentas_config[tipo_bien]["compra"]
+
+        # Registrar la transacción en las cuentas del vendedor
+        vendedor.registrar_transaccion(
+            otro_agente=comprador,
+            bien=bien,
+            es_venta=True,
+            cuenta_debito_codigo=cuentas_vendedor["debito"],
+            cuenta_credito_codigo=cuentas_vendedor["credito"],
+            precio=precio,
+        )
+
+        # Registrar la transacción en las cuentas del comprador
+        comprador.registrar_transaccion(
+            otro_agente=vendedor,
+            bien=bien,
+            es_venta=False,
+            cuenta_debito_codigo=cuentas_comprador["debito"],
+            cuenta_credito_codigo=cuentas_comprador["credito"],
+            precio=precio,
+        )
+
+    def realizar_produccion(
+        self, agente: Agent, bien_producido: Good, insumo_utilizado: Good
     ):
         """
-        Inicializa una nueva transacci n.
+        Realiza el proceso de producción de un bien y actualiza las cuentas del agente.
 
-        :param seller: El agente que vende el bien.
-        :param buyer: El agente que compra el bien.
-        :param good: El bien que se est  transaccionando.
-        :param amount: La cantidad de bienes que se est n transaccionando.
-        :param temporal_export: Si la transacci n es de exportaci n temporal (0 o 1).
-        :param national_VAT: Si nacionalizaria el IVA usando VAN  (0 o 1).
-        :param iva_status_transaccion: El estado de IVA de la transacci n ("gravado", "exento", "excluido").
-        :raises ValueError: Si el valor de 'temporal_export' o 'national_VAT' no es 0 o 1.
+        :param agente: El agente que realiza la producción.
+        :param bien_producido: El bien que se produce.
+        :param insumo_utilizado: El insumo utilizado en la producción.
         """
-        self.seller = seller
-        self.buyer = buyer
-        self.good = good
-        self.amount = amount
-        self.temporal_export = temporal_export
-        if self.temporal_export not in [0, 1]:
-            raise ValueError("El valor de 'temporal_export' debe ser 0 o 1.")
+        # Determinar el costo de producción (puedes ajustar esta lógica)
+        costo_produccion = (
+            insumo_utilizado.price
+        )  # Suponemos que el costo es el precio del insumo
+
+        # Determinar las cuentas a afectar según el tipo de producción
+        # Debes ajustar estos códigos de cuenta según tus plantillas
+        cuentas_produccion = {
+            ("materia prima", "intermedio"): {
+                "debito": "1436",  # Inventario de producto intermedio
+                "credito": "1435",  # Inventario de materia prima
+            },
+            ("intermedio", "final"): {
+                "debito": "1437",  # Inventario de producto final
+                "credito": "1436",  # Inventario de producto intermedio
+            },
+        }
+
+        tipo_produccion = (insumo_utilizado.tipo_bien, bien_producido.tipo_bien)
+        if tipo_produccion in cuentas_produccion:
+            cuentas = cuentas_produccion[tipo_produccion]
+            cuenta_debito_codigo = cuentas["debito"]
+            cuenta_credito_codigo = cuentas["credito"]
         else:
-            self.temporal_export = bool(self.temporal_export)
+            raise ValueError("Tipo de producción no soportado")
 
-        self.national_VAT = national_VAT
-        if self.national_VAT not in [0, 1]:
-            raise ValueError("El valor de 'national_VAT' debe ser 0 o 1.")
-        else:
-            self.national_VAT = bool(self.national_VAT)
-
-        self.iva_status_transaccion = iva_status_transaccion
-
-
-### --------------------- Clase Production ------------------------------
-
-
-class Production:
-    """
-    Clase para manejar operaciones de produccion
-    """
-
-    def __init__(
-        self,
-        producer: Agent,
-        good: Good,
-        amount_good: float,
-        inputs: List[str],
-    ):
-        """
-        Inicializa una nueva operaci n de producci n.
-
-        :param producer: El agente que produce el bien.
-        :param good: El bien que se est  produciendo.
-        :param amount_good: La cantidad del bien que se va a producir.
-        :param inputs: Una lista con los nombres de los insumos que se van a producir
-        """
+        # Registrar la producción en las cuentas del agente
+        agente.producir_bien(
+            bien_producido=bien_producido,
+            insumo_utilizado=insumo_utilizado,
+            cuenta_debito_codigo=cuenta_debito_codigo,
+            cuenta_credito_codigo=cuenta_credito_codigo,
+            costo_produccion=costo_produccion,
+        )
