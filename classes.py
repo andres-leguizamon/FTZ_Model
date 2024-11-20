@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 
 from utils import cargar_plantillas_cuentas
 
-from accounting_templates import dict_precios_1, plantillas_contables_1
+from accounting_templates import dict_precios_1, plantillas_contables_1, mapear_valor
 ### Ensayo
 
 # TODO Usar pathlib
@@ -233,6 +233,28 @@ class ZF(Agent):
 class NCT(Agent):
     def get_type(self) -> str:
         return "NCT"
+
+
+# ------------------------------------ Clase Flow --------------------------------------------
+
+
+class Flow:
+    def __init__(
+        self, name: str, owner: Agent, precio_venta: float = 0, ultimo_costo: float = 0
+    ):
+        self.name = name
+        self.owner = owner
+        self.precio_venta = precio_venta
+        self.ultimo_costo = ultimo_costo
+
+    def actualizar_precio_venta(self, nuevo_precio_venta: float):
+        self.precio_venta = nuevo_precio_venta
+
+    def actualizar_ultimo_costo(self, nuevo_ultimo_costo: float):
+        self.ultimo_costo = nuevo_ultimo_costo
+
+    def actualizar_owner(self, nuevo_owner: Agent):
+        self.owner = nuevo_owner
 
 
 # ------------------------------------- Clase Transaccion ------------------------------------

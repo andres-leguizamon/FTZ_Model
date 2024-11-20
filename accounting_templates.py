@@ -1,5 +1,8 @@
 ### Plantillas para realizar cuentas contables
 
+
+from classes import Flow
+
 """
 Parameter Definition
 
@@ -29,40 +32,56 @@ dict_precios_1 = {
 plantillas_contables_1 = {
     "materia prima": {
         "compra": {
-            "debito": [("1405", "precio_mp")],
-            "credito": [("1105", "precio_mp")],
+            "debito": [("1405", "precio")],
+            "credito": [("1105", "precio")],
         },
         "venta": {
-            "debito": [("1105", "precio_mp"), ("6135", "costo")],
-            "credito": [("4135", "precio_mp"), ("1405", "costo")],
+            "debito": [("1105", "precio"), ("6135", "costo")],
+            "credito": [("4135", "precio"), ("1405", "costo")],
         },
         "produccion": {
-            "debito": [("71", "precio_mp"), ("1410", "precio_mp")],
-            "credito": [("1405", "precio_mp"), ("71", "precio_mp")],
+            "debito": [("71", "costo"), ("1410", "costo")],
+            "credito": [("1405", "costo"), ("71", "costo")],
         },
     },
     "bien intermedio": {
         "compra": {
-            "debito": [("1405", "precio_bien_intermedio")],
-            "credito": [("1105", "precio_bien_intermedio")],
+            "debito": [("1405", "precio")],
+            "credito": [("1105", "precio")],
         },
         "venta": {
-            "debito": [("1105", "precio_bien_intermedio"), ("6135", "costo")],
-            "credito": [("4135", "precio_bien_intermedio"), ("1410", "costo")],
+            "debito": [("1105", "precio"), ("6135", "costo")],
+            "credito": [("4135", "precio"), ("1410", "costo")],
         },
         "produccion": {
-            "debito": [("71", "precio_mp"), ("1410", "precio_mp")],
-            "credito": [("1410", "precio_mp"), ("71", "precio_mp")],
+            "debito": [("71", "costo"), ("1410", "costo")],
+            "credito": [("1410", "costo"), ("71", "costo")],
         },
     },
     "bien final": {
         "compra": {
-            "debito": [("1405", "precio_bien")],
-            "credito": [("1105", "precio_bien")],
+            "debito": [("1405", "precio")],
+            "credito": [("1105", "precio")],
         },
         "venta": {
-            "debito": [("1105", "precio_bien_final"), ("6120", "costo")],
-            "credito": [("4120", "precio_bien_final"), ("1430", "costo")],
+            "debito": [("1105", "precio"), ("6120", "costo")],
+            "credito": [("4120", "precio"), ("1430", "costo")],
         },
     },
 }
+
+
+def mapear_valor(variable: str, flow: Flow):
+    """
+    Mapea el valor de una variable dada en el flujo de caja a su valor real.
+
+    :param variable: El nombre de la variable a mapear (precio o costo).
+    :param flow: El flujo de caja actual.
+    :return: El valor mapeado de la variable (None si no se reconoce la variable).
+    """
+    if variable == "precio":
+        return flow.precio_venta
+    elif variable == "costo":
+        return flow.ultimo_costo
+    else:
+        return None  # O puedes lanzar una excepción si la variable no es reconocida
