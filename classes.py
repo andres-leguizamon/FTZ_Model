@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 
 from utils import cargar_plantillas_cuentas
 
-
+from accounting_templates import dict_precios_1, plantillas_contables_1
 ### Ensayo
 
 # TODO Usar pathlib
@@ -79,17 +79,6 @@ class Account:
         return saldo
 
 
-### Prueba
-
-inventarios = Account("inventarios", 1)
-
-inventarios.registrar_transaccion(100, 0)
-
-inventarios.registrar_transaccion(0, 50)
-
-inventarios.calcular_totales()
-
-
 ### ---------------------- Clase Good ------------------------------
 
 
@@ -103,7 +92,6 @@ class Good(ABC):
         self,
         name: str,
         price: float,
-        tariff: float,
         insumos: Dict[str, float] = None,
     ):
         """
@@ -143,117 +131,19 @@ class Good(ABC):
         return f"{self.name} ({self.tipo_bien})"
 
 
-# -------------- Clase Agente ----------------
+# -------------- Clase Libro Contable
 
 
-class Agent(ABC):
-    """
-    Clase base abstracta para las empresas.
-    """
-
-    def __init__(
-        self,
-        nombre: str,
-        plantillas_cuentas: Dict,
-    ):
-        """
-        Inicializa una nueva instancia de Agent.
-
-        :param nombre: El nombre del agente.
-        :param plantillas_cuentas: Un diccionario que contiene las plantillas de cuentas
-                                   que se usarán para crear instancias de Account para el agente.
-
-        :param bienes_vendidos: Una lista de bienes vendidos por el agente.
-        :param bienes_producidos: Una lista de bienes producidos por el agente.
-        :param status_bienes: Un diccionario que contiene el status de todos los bienes del modelo para el agente,
-                              donde las claves son los posibles status y los valores son listas bienes
-        """
-
-        self.nombre = nombre
+class LibroContable:
+    def __init__(self, plantillas_cuentas: Dict, plantillas_transacciones: Dict):
+        self.plantillas_transacciones = plantillas_transacciones
         self.cuentas = {}
-        self.type = self.get_type()  # Establece el tipo según la subclase
 
-        # Inicializar las cuentas contables del agente
         for codigo, plantilla in plantillas_cuentas.items():
             cuenta_nombre = plantilla["cuenta"]
             codigo_tipo_cuenta = plantilla["codigo_tipo_cuenta"]
             # Creamos una nueva instancia de Account para cada cuenta del agente
             self.cuentas[codigo] = Account(name=cuenta_nombre, tipo=codigo_tipo_cuenta)
-
-    def registrar_transaccion(
-        self,
-        es_venta: bool,
-        cuenta_debito_codigo: str,
-        cuenta_credito_codigo: str,
-        precio: float,
-    ):
-        """
-        Registra una transacción contable en las cuentas del agente.
-
-        :param otro_agente: El agente con quien se realiza la transacción.
-        :param bien: El bien que se transacciona.
-        :param es_venta: True si es una venta, False si es una compra.
-        :param cuenta_debito_codigo: Código de la cuenta a debitar.
-        :param cuenta_credito_codigo: Código de la cuenta a acreditar.
-        :param precio: Precio al cual se realiza la transacción.
-        """
-        cuenta_debito = self.get_account_by_code(cuenta_debito_codigo)
-        cuenta_credito = self.get_account_by_code(cuenta_credito_codigo)
-
-        if cuenta_debito is None or cuenta_credito is None:
-            raise ValueError("Código de cuenta no válido.")
-
-        if es_venta:
-            # Registro en las cuentas del vendedor
-            cuenta_debito.registrar_transaccion(debe=precio, haber=0)
-            cuenta_credito.registrar_transaccion(debe=0, haber=precio)
-        else:
-            # Registro en las cuentas del comprador
-            cuenta_debito.registrar_transaccion(debe=precio, haber=0)
-            cuenta_credito.registrar_transaccion(debe=0, haber=precio)
-
-    def producir_bien(
-        self,
-        bien_producido: Good,
-        insumo_utilizado: Good,
-        cuenta_debito_codigo: str,
-        cuenta_credito_codigo: str,
-        costo_produccion: float,
-    ):
-        """
-        Registra el proceso de producción en las cuentas del agente.
-
-        :param bien_producido: El bien que se produce.
-        :param insumo_utilizado: El insumo utilizado en la producción.
-        :param cuenta_debito_codigo: Código de la cuenta a debitar.
-        :param cuenta_credito_codigo: Código de la cuenta a acreditar.
-        :param costo_produccion: Costo de producción del bien.
-        """
-        cuenta_debito = self.get_account_by_code(cuenta_debito_codigo)
-        cuenta_credito = self.get_account_by_code(cuenta_credito_codigo)
-
-        if bien_producido is None or insumo_utilizado is None:
-            raise ValueError("Bien o insumo no válido.")
-
-        if insumo_utilizado not in bien_producido.insumos:
-            raise ValueError("El insumo utilizado no es un insumo del bien producido.")
-
-        if cuenta_debito is None or cuenta_credito is None:
-            raise ValueError("Código de cuenta no válido.")
-
-        # Registrar salida del insumo
-        cuenta_credito.registrar_transaccion(debe=0, haber=costo_produccion)
-
-        # Registrar entrada del bien producido
-        cuenta_debito.registrar_transaccion(debe=costo_produccion, haber=0)
-
-    @abstractmethod
-    def get_type(self) -> str:
-        """
-        Método abstracto para obtener el tipo de empresa.
-        Debe ser implementado por las subclases.
-        """
-        pass
 
     def get_account_by_name(self, account_name: str) -> Optional["Account"]:
         """
@@ -274,7 +164,63 @@ class Agent(ABC):
         :param account_code: El código de la cuenta a buscar.
         :return: La cuenta encontrada o None si no existe.
         """
-        return self.cuentas.get(account_code, None)
+        return self.cuentas.get(int(account_code), None)
+
+    def debitar_cuenta(self, cuenta_codigo: str, monto: float):
+        """
+        Debita una cuenta del agente.
+
+        :param cuenta_codigo: Código de la cuenta a debitar.
+        :param monto: Monto a debitar de la cuenta.
+        """
+        cuenta = self.get_account_by_code(cuenta_codigo)
+        cuenta.registrar_transaccion(monto, 0)
+
+    def acreditar_cuenta(self, cuenta_codigo: str, monto: float):
+        """
+        Acredita una cuenta del agente.
+
+        :param cuenta_codigo: Código de la cuenta a acreditar.
+        """
+        cuenta = self.get_account_by_code(cuenta_codigo)
+        cuenta.registrar_transaccion(0, monto)
+
+
+# -------------- Clase Agente ----------------
+
+
+class Agent(ABC):
+    """
+    Clase base abstracta para los agentes.
+    """
+
+    def __init__(
+        self,
+        nombre: str,
+        plantillas_cuentas: Dict,
+        plantillas_transacciones: Dict,
+    ):
+        """
+        Inicializa una nueva instancia de Agent.
+
+        :param nombre: El nombre del agente.
+        :param plantillas_cuentas: Un diccionario que contiene las plantillas de cuentas
+                                   que se usarán para crear instancias de Account para el agente.
+        """
+        self.nombre = nombre
+        self.type = self.get_type()  # Establece el tipo según la subclase
+        # Crear el libro contable del agente
+        self.libro_contable = LibroContable(
+            plantillas_cuentas, plantillas_transacciones
+        )
+
+    @abstractmethod
+    def get_type(self) -> str:
+        """
+        Método abstracto para obtener el tipo de empresa.
+        Debe ser implementado por las subclases.
+        """
+        pass
 
 
 # Subclase para empresas ZF
@@ -289,27 +235,28 @@ class NCT(Agent):
         return "NCT"
 
 
-# ------------------------------------ Clase Modelo  ------------------------------------
+# ------------------------------------- Clase Transaccion ------------------------------------
 
 
-class Modelo:
-    """Clase para representar el modelo de bienes y empresas."""
-
+class Transaccion:
     def __init__(
         self,
-        lista_bienes: List[Good],
-        lista_agentes: List[Agent],
-        precios_transaccion: Dict[Tuple[str, str, str], float],
+        vendedor: Agent,
+        comprador: Agent,
+        bien: Good,
+        dict_precios_transaccion: Dict[Tuple[str, str, str], float],
     ):
-        self.lista_bienes = lista_bienes
-        self.lista_agentes = lista_agentes
-        self.precios_transaccion = (
-            precios_transaccion  # Diccionario para parametrizar precios
+        self.bien = bien
+        self.vendedor = vendedor
+        self.comprador = comprador
+        self.dict_precios_transaccion = dict_precios_transaccion
+        self.llave_dict_precios_transaccion = (
+            vendedor.type,
+            comprador.type,
+            bien.tipo_bien,
         )
 
-    def obtener_precio_transaccion(
-        self, bien: Good, vendedor: Agent, comprador: Agent
-    ) -> float:
+    def obtener_precio_transaccion(self) -> float:
         """
         Determina el precio de transacción del bien según los parámetros definidos en precios_transaccion.
 
@@ -319,107 +266,84 @@ class Modelo:
         :return: Precio ajustado del bien.
         """
         # Clave para acceder al diccionario de precios
-        key = (vendedor.type, comprador.type, bien.tipo_bien)
-        if key in self.precios_transaccion:
-            precio = self.precios_transaccion[key]
-        else:
-            # Si no se encuentra una regla específica, usar el precio base del bien
-            precio = bien.price
+        if self.llave_dict_precios_transaccion in self.dict_precios_transaccion:
+            precio = self.dict_precios_transaccion[self.llave_dict_precios_transaccion]
         return precio
 
-    def realizar_trade(self, vendedor: Agent, comprador: Agent, bien: Good):
+    def registrar_compra(self) -> None:
         """
-        Realiza una transacción de venta de un bien entre dos agentes y actualiza sus cuentas.
-
-        :param vendedor: Agente que vende el bien.
-        :param comprador: Agente que compra el bien.
-        :param bien: El bien que se transacciona.
+        Registra una compra de un bien por parte del comprador, actualizando sus cuentas contables.
         """
-        # Obtener el precio ajustado de la transacción
-        precio = self.obtener_precio_transaccion(bien, vendedor, comprador)
+        comprador = self.comprador
+        tipo_bien = self.bien.tipo_bien
 
-        # Determinar las cuentas a afectar según el tipo de bien
-        # Debes ajustar estos códigos de cuenta según tus plantillas
-        cuentas_config = {
-            "materia prima": {
-                "venta": {"debito": "1105", "credito": "4135"},
-                "compra": {"debito": "1435", "credito": "2205"},
-            },
-            "intermedio": {
-                "venta": {"debito": "1106", "credito": "4140"},
-                "compra": {"debito": "1436", "credito": "2206"},
-            },
-            "final": {
-                "venta": {"debito": "1107", "credito": "4145"},
-                "compra": {"debito": "1437", "credito": "2207"},
-            },
+        # Obtener la plantilla de compra para el tipo de bien
+        plantilla = comprador.libro_contable.plantillas_transacciones.get(
+            tipo_bien, {}
+        ).get("compra", {})
+        if not plantilla:
+            raise ValueError(
+                f"No se encontró una plantilla de compra para el tipo de bien '{tipo_bien}'"
+            )
+
+        # Obtener el precio del bien
+        precio_bien = self.obtener_precio_transaccion()
+
+        # Crear un diccionario para mapear los valores de la plantilla con los montos reales
+        variables = {
+            "precio_mp": precio_bien,
+            "precio_bien_intermedio": precio_bien,
+            "precio_bien": precio_bien,
+            "precio_bien_final": precio_bien,
+            "costo": 0,  # Puedes ajustar esto según cómo calcules el costo
         }
 
-        tipo_bien = bien.tipo_bien
-        cuentas_vendedor = cuentas_config[tipo_bien]["venta"]
-        cuentas_comprador = cuentas_config[tipo_bien]["compra"]
+        # Actualizar las cuentas del comprador según la plantilla
+        for cuenta_codigo, valor_key in plantilla.get("debito", []):
+            valor_calculado = variables.get(valor_key, 0)
+            comprador.libro_contable.debitar_cuenta(cuenta_codigo, valor_calculado)
 
-        # Registrar la transacción en las cuentas del vendedor
-        vendedor.registrar_transaccion(
-            otro_agente=comprador,
-            bien=bien,
-            es_venta=True,
-            cuenta_debito_codigo=cuentas_vendedor["debito"],
-            cuenta_credito_codigo=cuentas_vendedor["credito"],
-            precio=precio,
+        for cuenta_codigo, valor_key in plantilla.get("credito", []):
+            valor_calculado = variables.get(valor_key, 0)
+            comprador.libro_contable.acreditar_cuenta(cuenta_codigo, valor_calculado)
+
+
+def registrar_venta(self) -> None:
+    """
+    Registra una venta de un bien por parte del vendedor, actualizando sus cuentas contables.
+    """
+    vendedor = self.vendedor
+    tipo_bien = self.bien.tipo_bien
+
+    # Obtener la plantilla de venta para el tipo de bien
+    plantilla = vendedor.libro_contable.plantillas_transacciones.get(tipo_bien, {}).get(
+        "venta", {}
+    )
+    if not plantilla:
+        raise ValueError(
+            f"No se encontró una plantilla de venta para el tipo de bien '{tipo_bien}'"
         )
 
-        # Registrar la transacción en las cuentas del comprador
-        comprador.registrar_transaccion(
-            otro_agente=vendedor,
-            bien=bien,
-            es_venta=False,
-            cuenta_debito_codigo=cuentas_comprador["debito"],
-            cuenta_credito_codigo=cuentas_comprador["credito"],
-            precio=precio,
-        )
+    # Obtener el precio del bien
+    precio_bien = self.obtener_precio_transaccion()
 
-    def realizar_produccion(
-        self, agente: Agent, bien_producido: Good, insumo_utilizado: Good
-    ):
-        """
-        Realiza el proceso de producción de un bien y actualiza las cuentas del agente.
+    # Crear un diccionario para mapear los valores de la plantilla con los montos reales
+    variables = {
+        "precio_mp": precio_bien,
+        "precio_bien_intermedio": precio_bien,
+        "precio_bien": precio_bien,
+        "precio_bien_final": precio_bien,
+        "costo": 0,  # Puedes ajustar esto según cómo calculas el costo
+    }
 
-        :param agente: El agente que realiza la producción.
-        :param bien_producido: El bien que se produce.
-        :param insumo_utilizado: El insumo utilizado en la producción.
-        """
-        # Determinar el costo de producción (puedes ajustar esta lógica)
-        costo_produccion = (
-            insumo_utilizado.price
-        )  # Suponemos que el costo es el precio del insumo
+    # Actualizar las cuentas del vendedor según la plantilla
+    for cuenta_codigo, valor_key in plantilla.get("debito", []):
+        valor_calculado = variables.get(valor_key, 0)
+        vendedor.libro_contable.debitar_cuenta(cuenta_codigo, valor_calculado)
 
-        # Determinar las cuentas a afectar según el tipo de producción
-        # Debes ajustar estos códigos de cuenta según tus plantillas
-        cuentas_produccion = {
-            ("materia prima", "intermedio"): {
-                "debito": "1436",  # Inventario de producto intermedio
-                "credito": "1435",  # Inventario de materia prima
-            },
-            ("intermedio", "final"): {
-                "debito": "1437",  # Inventario de producto final
-                "credito": "1436",  # Inventario de producto intermedio
-            },
-        }
+    for cuenta_codigo, valor_key in plantilla.get("credito", []):
+        valor_calculado = variables.get(valor_key, 0)
+        vendedor.libro_contable.acreditar_cuenta(cuenta_codigo, valor_calculado)
 
-        tipo_produccion = (insumo_utilizado.tipo_bien, bien_producido.tipo_bien)
-        if tipo_produccion in cuentas_produccion:
-            cuentas = cuentas_produccion[tipo_produccion]
-            cuenta_debito_codigo = cuentas["debito"]
-            cuenta_credito_codigo = cuentas["credito"]
-        else:
-            raise ValueError("Tipo de producción no soportado")
 
-        # Registrar la producción en las cuentas del agente
-        agente.producir_bien(
-            bien_producido=bien_producido,
-            insumo_utilizado=insumo_utilizado,
-            cuenta_debito_codigo=cuenta_debito_codigo,
-            cuenta_credito_codigo=cuenta_credito_codigo,
-            costo_produccion=costo_produccion,
-        )
+# ------------------------------------ Clase Modelo  ------------------------------------
