@@ -1,6 +1,6 @@
 ### Plantillas para realizar cuentas contables
 
-
+from typing import Dict, Tuple
 from classes import Flow
 
 """
@@ -85,3 +85,17 @@ def mapear_valor(variable: str, flow: Flow):
         return flow.ultimo_costo
     else:
         return None  # O puedes lanzar una excepción si la variable no es reconocida
+
+
+def obtener_precio_transaccion(
+    key: Tuple[str, str, str],
+    dict_precios_transaccion: Dict[Tuple[str, str, str], float],
+) -> float:
+    """
+    Determina el precio de transaccion segun el diccionario de precios
+    el parametro key es
+    """
+    # Clave para acceder al diccionario de precios
+    if key in dict_precios_transaccion:
+        precio = dict_precios_transaccion[key]
+    return precio

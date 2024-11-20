@@ -5,7 +5,12 @@ from abc import ABC, abstractmethod
 
 from utils import cargar_plantillas_cuentas
 
-from accounting_templates import dict_precios_1, plantillas_contables_1, mapear_valor
+from accounting_templates import (
+    dict_precios_1,
+    plantillas_contables_1,
+    mapear_valor,
+    obtener_precio_transaccion,
+)
 ### Ensayo
 
 # TODO Usar pathlib
@@ -222,6 +227,12 @@ class Agent(ABC):
         """
         pass
 
+    def __repr__(self):
+        return f"{self.type} {self.nombre}"
+
+    def __str__(self):
+        return f"{self.type} {self.nombre}"
+
 
 # Subclase para empresas ZF
 class ZF(Agent):
@@ -240,21 +251,34 @@ class NCT(Agent):
 
 class Flow:
     def __init__(
-        self, name: str, owner: Agent, precio_venta: float = 0, ultimo_costo: float = 0
+        self, name: str, owner, precio_venta: float = 0, ultimo_costo: float = 0
     ):
         self.name = name
         self.owner = owner
         self.precio_venta = precio_venta
         self.ultimo_costo = ultimo_costo
+        self.historial = []  # Lista vacía para el historial
+        self.guardar_en_historial()  # Guarda el estado inicial en el historial
+
+    def guardar_en_historial(self):
+        estado = {
+            "owner": self.owner,
+            "precio_venta": self.precio_venta,
+            "ultimo_costo": self.ultimo_costo,
+        }
+        self.historial.append(estado)
 
     def actualizar_precio_venta(self, nuevo_precio_venta: float):
         self.precio_venta = nuevo_precio_venta
+        self.guardar_en_historial()
 
     def actualizar_ultimo_costo(self, nuevo_ultimo_costo: float):
         self.ultimo_costo = nuevo_ultimo_costo
+        self.guardar_en_historial()
 
-    def actualizar_owner(self, nuevo_owner: Agent):
+    def actualizar_owner(self, nuevo_owner):
         self.owner = nuevo_owner
+        self.guardar_en_historial()
 
 
 # ------------------------------------- Clase Transaccion ------------------------------------
@@ -278,21 +302,7 @@ class Transaccion:
             bien.tipo_bien,
         )
 
-    def obtener_precio_transaccion(self) -> float:
-        """
-        Determina el precio de transacción del bien según los parámetros definidos en precios_transaccion.
-
-        :param bien: Objeto Good que se va a transaccionar.
-        :param vendedor: Agente que vende el bien.
-        :param comprador: Agente que compra el bien.
-        :return: Precio ajustado del bien.
-        """
-        # Clave para acceder al diccionario de precios
-        if self.llave_dict_precios_transaccion in self.dict_precios_transaccion:
-            precio = self.dict_precios_transaccion[self.llave_dict_precios_transaccion]
-        return precio
-
-    def registrar_compra(self) -> None:
+    def registrar_compra(self, precio: float) -> None:
         """
         Registra una compra de un bien por parte del comprador, actualizando sus cuentas contables.
         """
@@ -308,64 +318,57 @@ class Transaccion:
                 f"No se encontró una plantilla de compra para el tipo de bien '{tipo_bien}'"
             )
 
-        # Obtener el precio del bien
-        precio_bien = self.obtener_precio_transaccion()
-
-        # Crear un diccionario para mapear los valores de la plantilla con los montos reales
-        variables = {
-            "precio_mp": precio_bien,
-            "precio_bien_intermedio": precio_bien,
-            "precio_bien": precio_bien,
-            "precio_bien_final": precio_bien,
-            "costo": 0,  # Puedes ajustar esto según cómo calcules el costo
-        }
-
         # Actualizar las cuentas del comprador según la plantilla
         for cuenta_codigo, valor_key in plantilla.get("debito", []):
-            valor_calculado = variables.get(valor_key, 0)
-            comprador.libro_contable.debitar_cuenta(cuenta_codigo, valor_calculado)
+            comprador.libro_contable.debitar_cuenta(cuenta_codigo, precio)
 
         for cuenta_codigo, valor_key in plantilla.get("credito", []):
-            valor_calculado = variables.get(valor_key, 0)
-            comprador.libro_contable.acreditar_cuenta(cuenta_codigo, valor_calculado)
+            comprador.libro_contable.acreditar_cuenta(cuenta_codigo, precio)
 
+    def registrar_venta(self, precio: float, costo: float) -> None:
+        """
+        Registra una venta de un bien por parte del vendedor, actualizando sus cuentas contables.
+        """
+        vendedor = self.vendedor
+        tipo_bien = self.bien.tipo_bien
 
-def registrar_venta(self) -> None:
-    """
-    Registra una venta de un bien por parte del vendedor, actualizando sus cuentas contables.
-    """
-    vendedor = self.vendedor
-    tipo_bien = self.bien.tipo_bien
+        # Obtener la plantilla de venta para el tipo de bien
+        plantilla = vendedor.libro_contable.plantillas_transacciones.get(
+            tipo_bien, {}
+        ).get("   venta", {})
+        if not plantilla:
+            raise ValueError(
+                f"No se encontró una plantilla de venta para el tipo de bien '{tipo_bien}'"
+            )
 
-    # Obtener la plantilla de venta para el tipo de bien
-    plantilla = vendedor.libro_contable.plantillas_transacciones.get(tipo_bien, {}).get(
-        "venta", {}
-    )
-    if not plantilla:
-        raise ValueError(
-            f"No se encontró una plantilla de venta para el tipo de bien '{tipo_bien}'"
-        )
+        # Procesar la plantilla, reemplazando 'precio' y 'costo' por los argumentos proporcionados
+        debitos = []
+        creditos = []
 
-    # Obtener el precio del bien
-    precio_bien = self.obtener_precio_transaccion()
+        for cuenta, variable in plantilla.get("debito", []):
+            if variable == "precio":
+                valor = precio
+            elif variable == "costo":
+                valor = costo
+            else:
+                raise ValueError(f"Variable desconocida '{variable}' en débito")
+        debitos.append((cuenta, valor))
 
-    # Crear un diccionario para mapear los valores de la plantilla con los montos reales
-    variables = {
-        "precio_mp": precio_bien,
-        "precio_bien_intermedio": precio_bien,
-        "precio_bien": precio_bien,
-        "precio_bien_final": precio_bien,
-        "costo": 0,  # Puedes ajustar esto según cómo calculas el costo
-    }
+        for cuenta, variable in plantilla.get("credito", []):
+            if variable == "precio":
+                valor = precio
+            elif variable == "costo":
+                valor = costo
+            else:
+                raise ValueError(f"Variable desconocida '{variable}' en crédito")
+        creditos.append((cuenta, valor))
 
-    # Actualizar las cuentas del vendedor según la plantilla
-    for cuenta_codigo, valor_key in plantilla.get("debito", []):
-        valor_calculado = variables.get(valor_key, 0)
-        vendedor.libro_contable.debitar_cuenta(cuenta_codigo, valor_calculado)
+    # Actualizar las cuentas contables del vendedor
+    for cuenta, valor in debitos:
+        vendedor.libro_contable.registrar_movimiento(cuenta, "debito", valor)
 
-    for cuenta_codigo, valor_key in plantilla.get("credito", []):
-        valor_calculado = variables.get(valor_key, 0)
-        vendedor.libro_contable.acreditar_cuenta(cuenta_codigo, valor_calculado)
+    for cuenta, valor in creditos:
+        vendedor.libro_contable.registrar_movimiento(cuenta, "credito", valor)
 
 
 # ------------------------------------ Clase Modelo  ------------------------------------
