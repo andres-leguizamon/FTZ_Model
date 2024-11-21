@@ -6,6 +6,9 @@ from accounting_templates import dict_precios_1, plantillas_contables_1
 from utils import cargar_plantillas_cuentas
 import classes as cl
 
+
+pan = cl.MateriaPrima("pan", 0)
+
 # Ruta de la plantilla contable
 ruta = r"C:\Users\andre\OneDrive\Documentos\Repositories\MIT_Tax_Avoidance\FTZ_Model\directorio_cuentas.xlsx"
 

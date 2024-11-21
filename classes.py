@@ -70,7 +70,7 @@ class Account:
 ### ---------------------- Clase Good ------------------------------
 
 
-class Good(ABC):
+class Good:
     """
     Clase abstracta base para los bienes.
     Permite añadir precio, tarifa del IVA, arancel e insumos necesarios para producir el bien.
@@ -81,20 +81,21 @@ class Good(ABC):
         name: str,
         price: float,
         insumos: Dict[str, float] = None,
+        tipo_bien: str = None,
     ):
         """
         Inicializa un nuevo bien.
 
         :param name: Nombre del bien.
         :param price: Precio base del bien.
-        :param tariff: Arancel aplicado al bien (en porcentaje).
         :param insumos: Diccionario de insumos necesarios para producir el bien.
                         Las claves son los nombres de otros bienes y los valores son las cantidades requeridas.
+        :param tipo_bien: Tipo del bien ("materia prima", "intermedio", "final").
         """
         self.name = name
         self.price = price
         self.insumos = insumos if insumos is not None else {}
-        self.tipo_bien = None  # "materia prima", "intermedio", "final"
+        self.tipo_bien = tipo_bien
 
     def asignar_tipo_bien(self, bienes_dict, usados_como_insumo):
         """
@@ -107,16 +108,34 @@ class Good(ABC):
         es_insumo = self.name in usados_como_insumo
 
         if tiene_insumos and es_insumo:
-            self.tipo_bien = "intermedio"
+            self.tipo_bien = "bien_intermedio"
         elif not tiene_insumos and es_insumo:
-            self.tipo_bien = "materia prima"
+            self.tipo_bien = "materia_prima"
         elif tiene_insumos and not es_insumo:
-            self.tipo_bien = "final"
+            self.tipo_bien = "bien_final"
         else:
             self.tipo_bien = "independiente"  # No tiene insumos y no es insumo de nadie
 
     def __repr__(self):
         return f"{self.name} ({self.tipo_bien})"
+
+    def cambiar_tipo_bien(self, nuevo_tipo_bien: str):
+        self.tipo_bien = nuevo_tipo_bien
+
+
+class MateriaPrima(Good):
+    def __init__(self, name: str, price: float, insumos: Dict[str, float] = None):
+        super().__init__(name, price, insumos, "materia_prima")
+
+
+class BienIntermedio(Good):
+    def __init__(self, name: str, price: float, insumos: Dict[str, float] = None):
+        super().__init__(name, price, insumos, "bien_intermedio")
+
+
+class BienFinal(Good):
+    def __init__(self, name: str, price: float, insumos: Dict[str, float] = None):
+        super().__init__(name, price, insumos, "bien_final")
 
 
 # -------------- Clase Libro Contable
@@ -337,6 +356,112 @@ class Flow:
 # ------------------------------------- Clase Transaccion ------------------------------------
 
 
+### Funcion auxiliar para debugging
+def obtener_plantilla_compra(comprador: Agent, tipo_bien) -> dict:
+    """
+    Obtiene la plantilla de compra para un tipo de bien en el libro contable del comprador.
+
+    Args:
+        comprador (Agent): El agente comprador con un libro contable que contiene plantillas.
+        tipo_bien (str): El tipo de bien para el cual se busca la plantilla de compra.
+
+    Returns:
+        dict: La plantilla de compra para el tipo de bien.
+
+    Raises:
+        ValueError: Si no se encuentra una plantilla de compra para el tipo de bien.
+    """
+    try:
+        plantilla = comprador.libro_contable.plantillas_transacciones.get(
+            tipo_bien, {}
+        ).get("compra", {})
+        if not plantilla:
+            raise ValueError(
+                f"No se encontró una plantilla de compra para el tipo de bien '{tipo_bien}'"
+            )
+        return plantilla
+    except Exception as e:
+        # Agregar un punto de depuración aquí
+        print("Error al obtener la plantilla de compra")
+        print(f"Comprador: {comprador}")
+        print(f"Tipo de bien: {tipo_bien}")
+        print(f"Libro contable: {comprador.libro_contable}")
+        print(
+            f"Plantillas de transacciones: {comprador.libro_contable.plantillas_transacciones}"
+        )
+        raise e
+
+
+def obtener_plantilla_venta(vendedor: Agent, tipo_bien) -> dict:
+    """
+    Obtiene la plantilla de compra para un tipo de bien en el libro contable del comprador.
+
+    Args:
+        comprador (Agent): El agente comprador con un libro contable que contiene plantillas.
+        tipo_bien (str): El tipo de bien para el cual se busca la plantilla de compra.
+
+    Returns:
+        dict: La plantilla de compra para el tipo de bien.
+
+    Raises:
+        ValueError: Si no se encuentra una plantilla de compra para el tipo de bien.
+    """
+    try:
+        plantilla = vendedor.libro_contable.plantillas_transacciones.get(
+            tipo_bien, {}
+        ).get("venta", {})
+        if not plantilla:
+            raise ValueError(
+                f"No se encontró una plantilla de compra para el tipo de bien '{tipo_bien}'"
+            )
+        return plantilla
+    except Exception as e:
+        # Agregar un punto de depuración aquí
+        print("Error al obtener la plantilla de compra")
+        print(f"Comprador: {vendedor}")
+        print(f"Tipo de bien: {tipo_bien}")
+        print(f"Libro contable: {vendedor.libro_contable}")
+        print(
+            f"Plantillas de transacciones: {vendedor.libro_contable.plantillas_transacciones}"
+        )
+        raise e
+
+
+def obtener_plantilla_produccion(productor: Agent, tipo_bien) -> dict:
+    """
+    Obtiene la plantilla de compra para un tipo de bien en el libro contable del comprador.
+
+    Args:
+        comprador (Agent): El agente comprador con un libro contable que contiene plantillas.
+        tipo_bien (str): El tipo de bien para el cual se busca la plantilla de compra.
+
+    Returns:
+        dict: La plantilla de compra para el tipo de bien.
+
+    Raises:
+        ValueError: Si no se encuentra una plantilla de compra para el tipo de bien.
+    """
+    try:
+        plantilla = productor.libro_contable.plantillas_transacciones.get(
+            tipo_bien, {}
+        ).get("produccion", {})
+        if not plantilla:
+            raise ValueError(
+                f"No se encontró una plantilla de compra para el tipo de bien '{tipo_bien}'"
+            )
+        return plantilla
+    except Exception as e:
+        # Agregar un punto de depuración aquí
+        print("Error al obtener la plantilla de compra")
+        print(f"Comprador: {productor}")
+        print(f"Tipo de bien: {productor}")
+        print(f"Libro contable: {productor.libro_contable}")
+        print(
+            f"Plantillas de transacciones: {productor.libro_contable.plantillas_transacciones}"
+        )
+        raise e
+
+
 class Transaccion:
     def __init__(
         self,
@@ -349,6 +474,7 @@ class Transaccion:
         self.vendedor = vendedor
         self.comprador = comprador
         self.dict_precios_transaccion = dict_precios_transaccion
+        self.tipo_bien = bien.tipo_bien
         self.key = (
             vendedor.type,
             comprador.type,
@@ -364,15 +490,8 @@ class Transaccion:
         """
         comprador = self.comprador
         tipo_bien = self.bien.tipo_bien
-
         # Obtener la plantilla de compra para el tipo de bien
-        plantilla = comprador.libro_contable.plantillas_transacciones.get(
-            tipo_bien, {}
-        ).get("compra", {})
-        if not plantilla:
-            raise ValueError(
-                f"No se encontró una plantilla de compra para el tipo de bien '{tipo_bien}'"
-            )
+        plantilla = obtener_plantilla_compra(comprador, tipo_bien)
 
         # Actualizar las cuentas del comprador según la plantilla
         for cuenta_codigo, valor_key in plantilla.get("debito", []):
@@ -389,13 +508,7 @@ class Transaccion:
         tipo_bien = self.bien.tipo_bien
 
         # Obtener la plantilla de venta para el tipo de bien
-        plantilla = vendedor.libro_contable.plantillas_transacciones.get(
-            tipo_bien, {}
-        ).get("   venta", {})
-        if not plantilla:
-            raise ValueError(
-                f"No se encontró una plantilla de venta para el tipo de bien '{tipo_bien}'"
-            )
+        plantilla = obtener_plantilla_venta(vendedor, tipo_bien)
 
         # Procesar la plantilla, reemplazando 'precio' y 'costo' por los argumentos proporcionados
         debitos = []
@@ -421,10 +534,10 @@ class Transaccion:
 
         # Actualizar las cuentas contables del vendedor
         for cuenta, valor in debitos:
-            vendedor.libro_contable.registrar_movimiento(cuenta, "debito", valor)
+            vendedor.libro_contable.debitar_cuenta(cuenta, "debito", valor)
 
         for cuenta, valor in creditos:
-            vendedor.libro_contable.registrar_movimiento(cuenta, "credito", valor)
+            vendedor.libro_contable.acreditar_cuenta(cuenta, "credito", valor)
 
 
 # ------------------------------------- Clase Produccion ---------------------------------------
@@ -444,13 +557,7 @@ class Produccion:
         # tipo_bien_output = self.bien_output.tipo_bien
 
         # Obtener la plantilla de producción para el tipo de bien de salida
-        plantilla = self.agente.libro_contable.plantillas_transacciones.get(
-            tipo_bien_input, {}
-        ).get("produccion", {})
-        if not plantilla:
-            raise ValueError(
-                f"No se encontró una plantilla de producción para el tipo de bien '{tipo_bien_input}'"
-            )
+        plantilla = obtener_plantilla_produccion(self.agente, tipo_bien_input)
 
         # Procesar la plantilla, reemplazando 'costo' por el argumento proporcionado
         debitos = []
@@ -472,14 +579,10 @@ class Produccion:
 
         # Actualizar las cuentas contables del agente
         for cuenta_codigo, valor in debitos:
-            self.agente.libro_contable.registrar_movimiento(
-                cuenta_codigo, "debito", valor
-            )
+            self.agente.libro_contable.debitar_cuenta(cuenta_codigo, "debito", valor)
 
         for cuenta_codigo, valor in creditos:
-            self.agente.libro_contable.registrar_movimiento(
-                cuenta_codigo, "credito", valor
-            )
+            self.agente.libro_contable.acreditar_cuenta(cuenta_codigo, "credito", valor)
 
 
 # -# ------------------------------------- Clase ejecutor_plan -------------------------------------
@@ -514,6 +617,7 @@ def obtener_precio_transaccion(
     Determina el precio de transaccion segun el diccionario de precios
     el parametro key es
     """
+    precio = 0
     # Clave para acceder al diccionario de precios
     if key in dict_precios_transaccion:
         precio = dict_precios_transaccion[key]
@@ -550,9 +654,9 @@ class EjecutorPlan:
         )
         self.flow = Flow("Flujo de Caja", self.mercado)
 
-        self.materia_prima = Good("materia_prima", 0)
-        self.bien_intermedio = Good("bien_intermedio", 0)
-        self.bien_final = Good("bien_final", 0)
+        self.materia_prima = MateriaPrima("materia_prima", 0)
+        self.bien_intermedio = BienIntermedio("bien_intermedio", 0)
+        self.bien_final = BienFinal("bien_final", 0)
 
         self.agentes = {0: self.planta_NCT, 1: self.planta_ZF}
 
@@ -596,7 +700,7 @@ class EjecutorPlan:
     def vender_bien_final_al_mercado(self, agente_actual):
         self.realizar_venta(agente_actual, self.mercado, self.bien_final)
 
-    def realizar_compra(self, agente_origen, agente_destino, bien):
+    def realizar_compra(self, agente_origen: Agent, agente_destino: Agent, bien: Good):
         transaccion = Transaccion(
             agente_origen, agente_destino, bien, self.dict_precios_transaccion
         )
