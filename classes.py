@@ -190,6 +190,41 @@ class LibroContable:
         cuenta = self.get_account_by_code(cuenta_codigo)
         cuenta.registrar_transaccion(0, monto)
 
+    def calcular_utilidad_operacional(self, tasa_impuesto: float) -> str:
+        """
+        Calcula la utilidad operacional y genera un estado de resultados.
+
+        :param tasa_impuesto: Tasa porcentual de impuesto (por ejemplo, 0.3 para 30%).
+        :return: Estado de resultados en formato de texto.
+        """
+        total_ingresos = 0
+        total_costos = 0
+
+        for cuenta in self.cuentas.values():
+            if cuenta.tipo == 4:
+                # Las cuentas tipo 4 (Ingresos) aumentan con el haber
+                saldo = cuenta.haber - cuenta.debe
+                total_ingresos += saldo
+            elif cuenta.tipo == 6:
+                # Las cuentas tipo 6 (Costos) aumentan con el debe
+                saldo = cuenta.debe - cuenta.haber
+                total_costos += saldo
+
+        utilidad_bruta = total_ingresos - total_costos
+        impuesto = utilidad_bruta * tasa_impuesto
+        utilidad_neta = utilidad_bruta - impuesto
+
+        # Generar el estado de resultados
+        estado_resultados = (
+            f"Ingresos Totales: {total_ingresos}\n"
+            f"Costos Totales: {total_costos}\n"
+            f"Utilidad Bruta: {utilidad_bruta}\n"
+            f"Impuesto ({tasa_impuesto * 100}%): {impuesto}\n"
+            f"Utilidad Neta: {utilidad_neta}\n"
+        )
+
+        return estado_resultados
+
 
 # -------------- Clase Agente ----------------
 
@@ -363,12 +398,12 @@ class Transaccion:
                 raise ValueError(f"Variable desconocida '{variable}' en crédito")
         creditos.append((cuenta, valor))
 
-    # Actualizar las cuentas contables del vendedor
-    for cuenta, valor in debitos:
-        vendedor.libro_contable.registrar_movimiento(cuenta, "debito", valor)
+        # Actualizar las cuentas contables del vendedor
+        for cuenta, valor in debitos:
+            vendedor.libro_contable.registrar_movimiento(cuenta, "debito", valor)
 
-    for cuenta, valor in creditos:
-        vendedor.libro_contable.registrar_movimiento(cuenta, "credito", valor)
+        for cuenta, valor in creditos:
+            vendedor.libro_contable.registrar_movimiento(cuenta, "credito", valor)
 
 
 # ------------------------------------ Clase Modelo  ------------------------------------

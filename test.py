@@ -16,29 +16,42 @@ plantilla_1 = cargar_plantillas_cuentas(
 )  ### Generar plantilla para las cuentas basada en el PUC
 
 
-# Inicializar agentes
-comprador = NCT(
+# Crear las plantas
+
+planta_NCT = NCT(
     nombre="Empresa NCT",
     plantillas_cuentas=plantilla_1,
     plantillas_transacciones=plantillas_contables_1,
 )
-vendedor = ZF(
+planta_ZF = ZF(
     nombre="Empresa ZF",
     plantillas_cuentas=plantilla_1,
     plantillas_transacciones=plantillas_contables_1,
 )
 
-# Crear un bien
-bien_mp = Good(name="Acero", price=100)
+# Crear los bienes
+bien_mp = Good(name="materia prima")
 bien_mp.tipo_bien = "materia prima"
 
-# Crear una transacción
-transaccion = Transaccion(
-    vendedor=vendedor,
-    comprador=comprador,
-    bien=bien_mp,
-    dict_precios_transaccion=dict_precios_1,
-)
+bien_intermedio = Good(name="intermedio")
+bien_intermedio.tipo_bien = "intermedio"
 
-# Registrar la compra
-transaccion.registrar_compra()
+bien_final = Good(name="final")
+bien_final.tipo_bien = "final"
+
+
+### Loop de Busqueda
+
+
+def ejecutar_plan(
+    decision_1: int, decision_2: int, decision_3: int, planta_1: ZF, planta_2: NCT
+):
+    # Verificar si los números son 1 o 0
+    if all(decision in [0, 1] for decision in [decision_1, decision_2, decision_3]):
+        # Convertir a booleanos
+        decision_1 = bool(decision_1)
+        decision_2 = bool(decision_2)
+        decision_3 = bool(decision_3)
+        return decision_1, decision_2, decision_3
+    else:
+        raise ValueError("Los números deben ser 0 o 1.")
