@@ -2,8 +2,8 @@ import pandas as pd
 
 #! TODO usar Pathlib
 
+
 ruta = r"C:\Users\andre\OneDrive\Documentos\Repositories\MIT_Tax_Avoidance\FTZ_Model\directorio_cuentas.xlsx"
-import pandas as pd
 
 
 def cargar_plantillas_cuentas(archivo_excel: str) -> dict:

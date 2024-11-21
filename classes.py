@@ -3,23 +3,6 @@
 from typing import List, Dict, Optional, Tuple
 from abc import ABC, abstractmethod
 
-from utils import cargar_plantillas_cuentas
-
-from accounting_templates import (
-    dict_precios_1,
-    plantillas_contables_1,
-    mapear_valor,
-    obtener_precio_transaccion,
-)
-### Ensayo
-
-# TODO Usar pathlib
-ruta = r"C:\Users\andre\OneDrive\Documentos\Repositories\MIT_Tax_Avoidance\FTZ_Model\directorio_cuentas.xlsx"
-
-plantilla_1 = cargar_plantillas_cuentas(
-    ruta
-)  ### Generar plantilla para las cuentas basada en el PUC
-
 
 class Account:
     """
@@ -214,6 +197,32 @@ class LibroContable:
         impuesto = utilidad_bruta * tasa_impuesto
         utilidad_neta = utilidad_bruta - impuesto
 
+        return utilidad_neta  # Devuelve el estado_resultados
+
+    def estado_resultados(self, tasa_impuesto: float) -> str:
+        """
+        Calcula la utilidad operacional y genera un estado de resultados.
+
+        :param tasa_impuesto: Tasa porcentual de impuesto (por ejemplo, 0.3 para 30%).
+        :return: Estado de resultados en formato de texto.
+        """
+        total_ingresos = 0
+        total_costos = 0
+
+        for cuenta in self.cuentas.values():
+            if cuenta.tipo == 4:
+                # Las cuentas tipo 4 (Ingresos) aumentan con el haber
+                saldo = cuenta.haber - cuenta.debe
+                total_ingresos += saldo
+            elif cuenta.tipo == 6:
+                # Las cuentas tipo 6 (Costos) aumentan con el debe
+                saldo = cuenta.debe - cuenta.haber
+                total_costos += saldo
+
+        utilidad_bruta = total_ingresos - total_costos
+        impuesto = utilidad_bruta * tasa_impuesto
+        utilidad_neta = utilidad_bruta - impuesto
+
         # Generar el estado de resultados
         estado_resultados = (
             f"Ingresos Totales: {total_ingresos}\n"
@@ -223,7 +232,7 @@ class LibroContable:
             f"Utilidad Neta: {utilidad_neta}\n"
         )
 
-        return estado_resultados
+        return estado_resultados  # Devuelve el estado_resultados
 
 
 # -------------- Clase Agente ----------------
@@ -246,9 +255,13 @@ class Agent(ABC):
         :param nombre: El nombre del agente.
         :param plantillas_cuentas: Un diccionario que contiene las plantillas de cuentas
                                    que se usarán para crear instancias de Account para el agente.
+        :param plantillas_transacciones: Un diccionario que contiene las plantillas de transacciones
+                                         que se usarán para crear instancias de Transaction para el agente.
         """
         self.nombre = nombre
         self.type = self.get_type()  # Establece el tipo según la subclase
+        self.plantilla_cuentas = plantillas_cuentas
+        self.plantilla_transacciones = plantillas_transacciones
         # Crear el libro contable del agente
         self.libro_contable = LibroContable(
             plantillas_cuentas, plantillas_transacciones
@@ -279,6 +292,11 @@ class ZF(Agent):
 class NCT(Agent):
     def get_type(self) -> str:
         return "NCT"
+
+
+class Market(Agent):
+    def get_type(self) -> str:
+        return "MKT"
 
 
 # ------------------------------------ Clase Flow --------------------------------------------
@@ -331,11 +349,14 @@ class Transaccion:
         self.vendedor = vendedor
         self.comprador = comprador
         self.dict_precios_transaccion = dict_precios_transaccion
-        self.llave_dict_precios_transaccion = (
+        self.key = (
             vendedor.type,
             comprador.type,
             bien.tipo_bien,
         )
+
+    def get_key(self):
+        return self.key
 
     def registrar_compra(self, precio: float) -> None:
         """
@@ -406,4 +427,221 @@ class Transaccion:
             vendedor.libro_contable.registrar_movimiento(cuenta, "credito", valor)
 
 
-# ------------------------------------ Clase Modelo  ------------------------------------
+# ------------------------------------- Clase Produccion ---------------------------------------
+
+
+class Produccion:
+    def __init__(self, agente: Agent, bien_input: Good, bien_output: Good):
+        self.agente = agente
+        self.bien_input = bien_input
+        self.bien_output = bien_output
+
+    def registrar_produccion(self, costo: float) -> None:
+        """
+        Registra una operación de producción, actualizando las cuentas contables del agente.
+        """
+        tipo_bien_input = self.bien_input.tipo_bien
+        # tipo_bien_output = self.bien_output.tipo_bien
+
+        # Obtener la plantilla de producción para el tipo de bien de salida
+        plantilla = self.agente.libro_contable.plantillas_transacciones.get(
+            tipo_bien_input, {}
+        ).get("produccion", {})
+        if not plantilla:
+            raise ValueError(
+                f"No se encontró una plantilla de producción para el tipo de bien '{tipo_bien_input}'"
+            )
+
+        # Procesar la plantilla, reemplazando 'costo' por el argumento proporcionado
+        debitos = []
+        creditos = []
+
+        for cuenta_codigo, variable in plantilla.get("debito", []):
+            if variable == "costo":
+                valor = costo
+            else:
+                raise ValueError(f"Variable desconocida '{variable}' en débito")
+            debitos.append((cuenta_codigo, valor))
+
+        for cuenta_codigo, variable in plantilla.get("credito", []):
+            if variable == "costo":
+                valor = costo
+            else:
+                raise ValueError(f"Variable desconocida '{variable}' en crédito")
+            creditos.append((cuenta_codigo, valor))
+
+        # Actualizar las cuentas contables del agente
+        for cuenta_codigo, valor in debitos:
+            self.agente.libro_contable.registrar_movimiento(
+                cuenta_codigo, "debito", valor
+            )
+
+        for cuenta_codigo, valor in creditos:
+            self.agente.libro_contable.registrar_movimiento(
+                cuenta_codigo, "credito", valor
+            )
+
+
+# -# ------------------------------------- Clase ejecutor_plan -------------------------------------
+
+# Funciones auxiliares
+
+
+def mapear_valor(variable: str, flow: Flow):
+    """
+    Mapea el valor de una variable dada en el flujo de caja a su valor real.
+
+    :param variable: El nombre de la variable a mapear (precio o costo).
+    :param flow: El flujo de caja actual.
+    :return: El valor mapeado de la variable (None si no se reconoce la variable).
+    """
+    if variable == "precio":
+        return flow.precio_venta
+    elif variable == "costo":
+        return flow.ultimo_costo
+    else:
+        return None  # O puedes lanzar una excepción si la variable no es reconocida
+
+
+# Funciones auxiliares
+
+
+def obtener_precio_transaccion(
+    key: Tuple[str, str, str],
+    dict_precios_transaccion: Dict[Tuple[str, str, str], float],
+) -> float:
+    """
+    Determina el precio de transaccion segun el diccionario de precios
+    el parametro key es
+    """
+    # Clave para acceder al diccionario de precios
+    if key in dict_precios_transaccion:
+        precio = dict_precios_transaccion[key]
+    return precio
+
+
+# Definicion de clase
+
+
+class EjecutorPlan:
+    def __init__(
+        self,
+        plan: List[int],
+        planta_NCT: Agent,
+        planta_ZF: Agent,
+        dict_precios_transaccion: Dict[Tuple[str, str, str], float],
+    ):
+        """
+        Inicializa un nuevo ejecutor de plan.
+
+        :param plan: Lista de enteros que representa el plan de producción (0 o 1).
+        :param planta_NCT: Instancia de la clase NCT, que representa la planta de NCT.
+        :param planta_ZF: Instancia de la clase ZF, que representa la planta de ZF.
+        :param dict_precios_transaccion: Diccionario con los precios de transacción.
+        """
+        self.plan = plan
+        self.planta_NCT = planta_NCT
+        self.planta_ZF = planta_ZF
+        self.dict_precios_transaccion = dict_precios_transaccion
+        self.mercado = Market(
+            "Mercado",
+            self.planta_NCT.plantilla_cuentas,
+            self.planta_NCT.plantilla_transacciones,
+        )
+        self.flow = Flow("Flujo de Caja", self.mercado)
+
+        self.materia_prima = Good("materia_prima", 0)
+        self.bien_intermedio = Good("bien_intermedio", 0)
+        self.bien_final = Good("bien_final", 0)
+
+        self.agentes = {0: self.planta_NCT, 1: self.planta_ZF}
+
+    def ejecutar(self):
+        """
+        Ejecuta el plan de producción basado en la lista de decisiones.
+        """
+        agente_actual = self.comprar_materia_prima()
+        agente_actual = self.producir_bien_intermedio(agente_actual)
+        agente_actual = self.producir_bien_final(agente_actual)
+        agente_actual = self.transferir_bien_final_a_NCT(agente_actual)
+        self.vender_bien_final_al_mercado(agente_actual)
+
+    def comprar_materia_prima(self):
+        agente_destino = self.agentes[self.plan[0]]
+        self.realizar_compra(self.mercado, agente_destino, self.materia_prima)
+        return agente_destino
+
+    def producir_bien_intermedio(self, agente_actual):
+        agente_destino = self.agentes[self.plan[1]]
+        if agente_actual != agente_destino:
+            self.transferir_bien(agente_actual, agente_destino, self.materia_prima)
+            agente_actual = agente_destino
+        self.producir_bien(agente_actual, self.materia_prima, self.bien_intermedio)
+        return agente_actual
+
+    def producir_bien_final(self, agente_actual):
+        agente_destino = self.agentes[self.plan[2]]
+        if agente_actual != agente_destino:
+            self.transferir_bien(agente_actual, agente_destino, self.bien_intermedio)
+            agente_actual = agente_destino
+        self.producir_bien(agente_actual, self.bien_intermedio, self.bien_final)
+        return agente_actual
+
+    def transferir_bien_final_a_NCT(self, agente_actual):
+        if agente_actual != self.planta_NCT:
+            self.transferir_bien(agente_actual, self.planta_NCT, self.bien_final)
+            agente_actual = self.planta_NCT
+        return agente_actual
+
+    def vender_bien_final_al_mercado(self, agente_actual):
+        self.realizar_venta(agente_actual, self.mercado, self.bien_final)
+
+    def realizar_compra(self, agente_origen, agente_destino, bien):
+        transaccion = Transaccion(
+            agente_origen, agente_destino, bien, self.dict_precios_transaccion
+        )
+        precio = self.obtener_precio_transaccion(transaccion.get_key())
+        transaccion.registrar_compra(precio)
+        self.actualizar_flow(agente_destino, precio)
+
+    def transferir_bien(self, agente_origen, agente_destino, bien):
+        transaccion = Transaccion(
+            agente_origen, agente_destino, bien, self.dict_precios_transaccion
+        )
+        precio = self.obtener_precio_transaccion(
+            transaccion.get_key(),
+        )
+
+        # Actualizar el precio de venta del flow
+        self.flow.actualizar_precio_venta(precio)
+
+        # Registrar la compra con el nuevo precio para el comprador
+        transaccion.registrar_compra(self.flow.precio_venta)
+
+        # Registrar la venta con el nuevo precio de venta y el costo anterior para el vendedor
+        transaccion.registrar_venta(self.flow.precio_venta, self.flow.ultimo_costo)
+
+        # Actualizar el owner del flow
+        self.flow.actualizar_owner(agente_destino)
+
+        # Actualizar el último costo del flow con el precio de venta
+        self.flow.actualizar_ultimo_costo(self.flow.precio_venta)
+
+    def producir_bien(self, agente, bien_entrada, bien_salida):
+        produccion = Produccion(agente, bien_entrada, bien_salida)
+        produccion.registrar_produccion(self.flow.ultimo_costo)
+
+    def realizar_venta(self, agente_origen, agente_destino, bien):
+        transaccion = Transaccion(
+            agente_origen, agente_destino, bien, self.dict_precios_transaccion
+        )
+        precio = self.obtener_precio_transaccion(transaccion.get_key())
+        transaccion.registrar_venta(precio)
+
+    def obtener_precio_transaccion(self, llave):
+        return obtener_precio_transaccion(llave, self.dict_precios_transaccion)
+
+    def actualizar_flow(self, agente_destino, precio):
+        self.flow.actualizar_owner(agente_destino)
+        self.flow.actualizar_precio_venta(precio)
+        self.flow.actualizar_ultimo_costo(precio)

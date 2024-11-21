@@ -1,57 +1,85 @@
-from accounting_templates import plantillas_contables_1, dict_precios_1
+import itertools
+from typing import List, Dict, Tuple
 
-from classes import Agent, NCT, ZF, Good, Transaccion, LibroContable, Account
-
+# Importar tus módulos y clases
+from accounting_templates import dict_precios_1, plantillas_contables_1
 from utils import cargar_plantillas_cuentas
+import classes as cl
 
-
-# prueba
-
-
-# TODO Usar pathlib
+# Ruta de la plantilla contable
 ruta = r"C:\Users\andre\OneDrive\Documentos\Repositories\MIT_Tax_Avoidance\FTZ_Model\directorio_cuentas.xlsx"
 
-plantilla_1 = cargar_plantillas_cuentas(
-    ruta
-)  ### Generar plantilla para las cuentas basada en el PUC
+# Cargar la plantilla contable
+plantilla_1 = cargar_plantillas_cuentas(ruta)
+
+# Definir el diccionario de precios de transacción (asegúrate de que esté definido correctamente)
+dict_precios_transaccion = dict_precios_1  # Asumiendo que dict_precios_1 está definido
 
 
-# Crear las plantas
-
-planta_NCT = NCT(
-    nombre="Empresa NCT",
-    plantillas_cuentas=plantilla_1,
-    plantillas_transacciones=plantillas_contables_1,
-)
-planta_ZF = ZF(
-    nombre="Empresa ZF",
-    plantillas_cuentas=plantilla_1,
-    plantillas_transacciones=plantillas_contables_1,
-)
-
-# Crear los bienes
-bien_mp = Good(name="materia prima")
-bien_mp.tipo_bien = "materia prima"
-
-bien_intermedio = Good(name="intermedio")
-bien_intermedio.tipo_bien = "intermedio"
-
-bien_final = Good(name="final")
-bien_final.tipo_bien = "final"
-
-
-### Loop de Busqueda
-
-
-def ejecutar_plan(
-    decision_1: int, decision_2: int, decision_3: int, planta_1: ZF, planta_2: NCT
+# Función para calcular la utilidad del plan
+def utilidad_plan(
+    plan: List[int], dict_precios_transaccion: Dict[Tuple[str, str, str], float]
 ):
-    # Verificar si los números son 1 o 0
-    if all(decision in [0, 1] for decision in [decision_1, decision_2, decision_3]):
-        # Convertir a booleanos
-        decision_1 = bool(decision_1)
-        decision_2 = bool(decision_2)
-        decision_3 = bool(decision_3)
-        return decision_1, decision_2, decision_3
-    else:
-        raise ValueError("Los números deben ser 0 o 1.")
+    # Crear nuevas instancias de los agentes para cada iteración
+    planta_ZF = cl.ZF("ZF", plantilla_1, plantillas_contables_1)
+    planta_NCT = cl.NCT("NCT", plantilla_1, plantillas_contables_1)
+
+    # Crear el ejecutor del plan y ejecutar el plan
+    ejecutor = cl.EjecutorPlan(plan, planta_NCT, planta_ZF, dict_precios_transaccion)
+    ejecutor.ejecutar()
+
+    # Calcular la utilidad operacional de cada planta
+    utilidad_NCT = ejecutor.planta_NCT.libro_contable.calcular_utilidad_operacional(
+        0.35
+    )
+    utilidad_ZF = ejecutor.planta_ZF.libro_contable.calcular_utilidad_operacional(0.20)
+
+    # Sumar las utilidades para obtener la utilidad total
+    utilidad_total = utilidad_NCT + utilidad_ZF
+    return utilidad_total
+
+
+# Función para generar los estados financieros finales del plan
+def contabilidad_final_plan(
+    plan: List[int], dict_precios_transaccion: Dict[Tuple[str, str, str], float]
+):
+    # Crear nuevas instancias de los agentes
+    planta_ZF = cl.ZF("ZF", plantilla_1, dict_precios_transaccion)
+    planta_NCT = cl.NCT("NCT", plantilla_1, dict_precios_transaccion)
+
+    # Ejecutar el plan
+    ejecutor = cl.EjecutorPlan(plan, planta_NCT, planta_ZF, dict_precios_transaccion)
+    ejecutor.ejecutar()
+
+    # Generar los estados financieros de cada planta
+    estado_NCT = ejecutor.planta_NCT.libro_contable.generar_estado_resultados()
+    estado_ZF = ejecutor.planta_ZF.libro_contable.generar_estado_resultados()
+    return estado_NCT, estado_ZF
+
+
+# Variables para almacenar el mejor plan y la mayor utilidad
+mejor_plan = None
+mayor_utilidad = float("-inf")
+
+# Generar todas las combinaciones posibles de planes (8 combinaciones)
+for plan in itertools.product([0, 1], repeat=3):
+    plan = list(plan)  # Convertir la tupla en lista
+    utilidad = utilidad_plan(plan, dict_precios_transaccion)
+
+    print(f"Plan: {plan}, Utilidad Total: {utilidad}")
+
+    # Actualizar el mejor plan si se encuentra una mayor utilidad
+    if utilidad > mayor_utilidad:
+        mayor_utilidad = utilidad
+        mejor_plan = plan
+
+# Mostrar el mejor plan y su utilidad
+print("\nEl mejor plan es:", mejor_plan)
+print("Con una utilidad total de:", mayor_utilidad)
+
+# Obtener y mostrar los estados financieros finales del mejor plan
+estado_NCT, estado_ZF = contabilidad_final_plan(mejor_plan, dict_precios_transaccion)
+print("\nEstado de Resultados de NCT:")
+print(estado_NCT)
+print("\nEstado de Resultados de ZF:")
+print(estado_ZF)
