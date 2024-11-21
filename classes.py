@@ -31,13 +31,10 @@ class Account:
     def mostrar_historial(self) -> None:
         return self.historial
 
-    def calcular_totales(self) -> Dict:
-        total_debe = sum(transaccion["debe"] for transaccion in self.historial.values())
-        total_haber = sum(
-            transaccion["haber"] for transaccion in self.historial.values()
-        )
+    def calcular_totales(self) -> dict:
+        total_debe = self.debe
+        total_haber = self.haber
         neto = total_haber - total_debe
-        totales_cuenta = {}
 
         if neto > 0:
             saldo = {"haber": neto}
@@ -46,16 +43,10 @@ class Account:
         else:
             saldo = "Saldo neto: 0 (Debe y Haber son iguales)"
 
-        totales_cuenta = {"Debe": total_debe, "Haber": total_haber, "Neto": saldo}
+        return {"Debe": total_debe, "Haber": total_haber, "Neto": saldo}
 
-        return totales_cuenta
-
-    def saldo_neto(self) -> Dict:
-        total_debe = sum(transaccion["debe"] for transaccion in self.historial.values())
-        total_haber = sum(
-            transaccion["haber"] for transaccion in self.historial.values()
-        )
-        neto = total_haber - total_debe
+    def saldo_neto(self) -> dict:
+        neto = self.haber - self.debe
 
         if neto > 0:
             saldo = {"haber": neto}
@@ -65,6 +56,14 @@ class Account:
             saldo = {"debe": 0, "haber": 0}
 
         return saldo
+
+    @property
+    def debe(self) -> float:
+        return sum(transaccion["debe"] for transaccion in self.historial.values())
+
+    @property
+    def haber(self) -> float:
+        return sum(transaccion["haber"] for transaccion in self.historial.values())
 
 
 ### ---------------------- Clase Good ------------------------------
@@ -511,33 +510,25 @@ class Transaccion:
         plantilla = obtener_plantilla_venta(vendedor, tipo_bien)
 
         # Procesar la plantilla, reemplazando 'precio' y 'costo' por los argumentos proporcionados
-        debitos = []
-        creditos = []
-
         for cuenta, variable in plantilla.get("debito", []):
             if variable == "precio":
                 valor = precio
+                vendedor.libro_contable.debitar_cuenta(cuenta, valor)
             elif variable == "costo":
                 valor = costo
+                vendedor.libro_contable.debitar_cuenta(cuenta, valor)
             else:
                 raise ValueError(f"Variable desconocida '{variable}' en débito")
-        debitos.append((cuenta, valor))
 
         for cuenta, variable in plantilla.get("credito", []):
             if variable == "precio":
                 valor = precio
+                vendedor.libro_contable.acreditar_cuenta(cuenta, valor)
             elif variable == "costo":
                 valor = costo
+                vendedor.libro_contable.acreditar_cuenta(cuenta, valor)
             else:
                 raise ValueError(f"Variable desconocida '{variable}' en crédito")
-        creditos.append((cuenta, valor))
-
-        # Actualizar las cuentas contables del vendedor
-        for cuenta, valor in debitos:
-            vendedor.libro_contable.debitar_cuenta(cuenta, "debito", valor)
-
-        for cuenta, valor in creditos:
-            vendedor.libro_contable.acreditar_cuenta(cuenta, "credito", valor)
 
 
 # ------------------------------------- Clase Produccion ---------------------------------------
@@ -579,10 +570,10 @@ class Produccion:
 
         # Actualizar las cuentas contables del agente
         for cuenta_codigo, valor in debitos:
-            self.agente.libro_contable.debitar_cuenta(cuenta_codigo, "debito", valor)
+            self.agente.libro_contable.debitar_cuenta(cuenta_codigo, valor)
 
         for cuenta_codigo, valor in creditos:
-            self.agente.libro_contable.acreditar_cuenta(cuenta_codigo, "credito", valor)
+            self.agente.libro_contable.acreditar_cuenta(cuenta_codigo, valor)
 
 
 # -# ------------------------------------- Clase ejecutor_plan -------------------------------------
@@ -740,7 +731,8 @@ class EjecutorPlan:
             agente_origen, agente_destino, bien, self.dict_precios_transaccion
         )
         precio = self.obtener_precio_transaccion(transaccion.get_key())
-        transaccion.registrar_venta(precio)
+        costo = self.flow.ultimo_costo
+        transaccion.registrar_venta(precio, costo)
 
     def obtener_precio_transaccion(self, llave):
         return obtener_precio_transaccion(llave, self.dict_precios_transaccion)
