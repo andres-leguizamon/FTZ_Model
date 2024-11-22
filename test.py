@@ -41,9 +41,20 @@ dict_precios_2 = {
 planta_NCT = cl.NCT("NCT", plantilla_1, plantillas_contables_1)
 planta_ZF = cl.ZF("ZF", plantilla_1, plantillas_contables_1)
 
-plan = [1, 1, 0]
+plan = [0, 1, 1]
 
 ejecutor = cl.EjecutorPlan(plan, planta_NCT, planta_ZF, dict_precios_2)
 ejecutor.ejecutar()
 
-planta_NCT.calcular_utilidad_operacional()
+
+u1 = planta_NCT.generar_estado_resultados()
+
+u2 = planta_ZF.generar_estado_resultados()
+
+
+W = (
+    planta_NCT.calcular_utilidad_operacional()
+    + planta_ZF.calcular_utilidad_operacional()
+)
+
+print(u1, u2, "Utilidad Agregada", "|", W)

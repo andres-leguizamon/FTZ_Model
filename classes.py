@@ -308,6 +308,11 @@ class Agent(ABC):
             plantillas_cuentas, plantillas_transacciones
         )
 
+    def reiniciar_estado_contable(self):
+        self.libro_contable = LibroContable(
+            self.plantilla_cuentas, self.plantilla_transacciones
+        )
+
     @abstractmethod
     def get_type(self) -> str:
         """
