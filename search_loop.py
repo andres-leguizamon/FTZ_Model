@@ -1,10 +1,11 @@
 from typing import List, Dict, Tuple
-from itertools import product
-from typing import List, Dict, Tuple
+
+
+from accounting_templates import plantillas_contables_1, dict_precios_1
+from utils import cargar_plantillas_cuentas
+import classes as cl
 
 # Importar tus módulos y clases
-
-import classes as cl
 
 
 def utilidad_plan(
@@ -39,7 +40,9 @@ def utilidad_plan(
 #####--------------- Loop de Busqueda ----------------------
 
 
-def encontrar_mejor_plan(NCT: cl.NCT, ZF: cl.ZF, dict_precios_transaccion, plan_base):
+def encontrar_mejor_plan(
+    NCT: cl.NCT, ZF: cl.ZF, dict_precios_transaccion, n_decisiones
+):
     """
     Encuentra el mejor plan de decisiones que maximice la utilidad agregada.
 
@@ -53,8 +56,8 @@ def encontrar_mejor_plan(NCT: cl.NCT, ZF: cl.ZF, dict_precios_transaccion, plan_
         tuple: Mejor plan encontrado y la utilidad agregada correspondiente.
     """
     # Define el rango de planes posibles. Aquí suponemos que cada elemento del plan puede ser 0 o 1.
-    num_decisiones = len(plan_base)  # El número de decisiones en el plan base
-    todos_los_planes = list(product([0, 1], repeat=num_decisiones))
+    # El número de decisiones en el plan base
+    todos_los_planes = list(product([0, 1], repeat=n_decisiones))
 
     # Variable para almacenar el mejor plan y su utilidad
     mejor_plan = None
@@ -77,3 +80,16 @@ def encontrar_mejor_plan(NCT: cl.NCT, ZF: cl.ZF, dict_precios_transaccion, plan_
 
     # Retorna el mejor plan y la utilidad agregada correspondiente
     return {"mejor_plan": mejor_plan, "max_utilidad_agregada": max_utilidad_agregada}
+
+
+# Ruta de la plantilla contable
+ruta = r"C:\Users\andre\OneDrive\Documentos\Repositories\MIT_Tax_Avoidance\FTZ_Model\directorio_cuentas.xlsx"
+
+# Cargar la plantilla contable
+plantilla_1 = cargar_plantillas_cuentas(ruta)
+
+### Instanciar Agentes de NCT y ZF
+planta_NCT = cl.NCT("NCT", plantilla_1, plantillas_contables_1)
+planta_ZF = cl.ZF("ZF", plantilla_1, plantillas_contables_1)
+
+encontrar_mejor_plan(planta_NCT, planta_ZF, dict_precios_1, 3)

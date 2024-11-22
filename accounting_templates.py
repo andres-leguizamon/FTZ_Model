@@ -12,7 +12,7 @@ Parameter Definition
 dict_precios_1 = {
     # Combinaciones de "MKT" como vendedor
     ("MKT", "ZF", "materia_prima"): 5,
-    ("MKT", "NCT", "materia_prima"): 1,
+    ("MKT", "NCT", "materia_prima"): 5,
     # Combinaciones de "MKT" como comprador
     ("NCT", "MKT", "bien_final"): 7,
     ("ZF", "MKT", "bien_final"): 7,

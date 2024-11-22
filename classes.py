@@ -59,11 +59,147 @@ class Account:
 
     @property
     def debe(self) -> float:
+        """
+        Propiedad que devuelve la suma total de los valores de "debe" en el historial de transacciones.
+
+        :return: Suma total de los valores de "debe".
+        :rtype: float
+        """
         return sum(transaccion["debe"] for transaccion in self.historial.values())
 
     @property
     def haber(self) -> float:
         return sum(transaccion["haber"] for transaccion in self.historial.values())
+
+
+### --------------------- Libro Contable
+
+
+class LibroContable:
+    def __init__(self, plantillas_cuentas: Dict, plantillas_transacciones: Dict):
+        self.plantillas_transacciones = plantillas_transacciones
+        self.cuentas = {}
+
+        for codigo, plantilla in plantillas_cuentas.items():
+            cuenta_nombre = plantilla["cuenta"]
+            codigo_tipo_cuenta = plantilla["codigo_tipo_cuenta"]
+            # Creamos una nueva instancia de Account para cada cuenta del agente
+            self.cuentas[codigo] = Account(name=cuenta_nombre, tipo=codigo_tipo_cuenta)
+
+    def get_account_by_name(self, account_name: str) -> Optional["Account"]:
+        """
+        Obtiene una cuenta por su nombre.
+
+        :param account_name: El nombre de la cuenta a buscar.
+        :return: La cuenta encontrada o None si no existe.
+        """
+        for cuenta in self.cuentas.values():
+            if cuenta.name == account_name:
+                return cuenta
+        return None
+
+    def get_account_by_code(self, account_code: str) -> Optional["Account"]:
+        """
+        Obtiene una cuenta por su código.
+
+        :param account_code: El código de la cuenta a buscar.
+        :return: La cuenta encontrada o None si no existe.
+        """
+        return self.cuentas.get(int(account_code), None)
+
+    def debitar_cuenta(self, cuenta_codigo: str, monto: float):
+        """
+        Debita una cuenta del agente.
+
+        :param cuenta_codigo: Código de la cuenta a debitar.
+        :param monto: Monto a debitar de la cuenta.
+        """
+        cuenta = self.get_account_by_code(cuenta_codigo)
+        cuenta.registrar_transaccion(monto, 0)
+
+    def acreditar_cuenta(self, cuenta_codigo: str, monto: float):
+        """
+        Acredita una cuenta del agente.
+
+        :param cuenta_codigo: Código de la cuenta a acreditar.
+        """
+        cuenta = self.get_account_by_code(cuenta_codigo)
+        cuenta.registrar_transaccion(0, monto)
+
+    def calcular_utilidad_operacional(self, tasa_impuesto: float) -> str:
+        """
+        Calcula la utilidad operacional y genera un estado de resultados.
+
+        :param tasa_impuesto: Tasa porcentual de impuesto (por ejemplo, 0.3 para 30%).
+        :return: Estado de resultados en formato de texto.
+        """
+        total_ingresos = 0
+        total_costos = 0
+
+        # Filtra las cuentas por tipo de una vez
+        cuentas_tipo_4 = [
+            cuenta for cuenta in self.cuentas.values() if cuenta.tipo == 4
+        ]
+        cuentas_tipo_6 = [
+            cuenta for cuenta in self.cuentas.values() if cuenta.tipo == 6
+        ]
+
+        # Suma los ingresos y costos
+        total_ingresos = sum(cuenta.haber - cuenta.debe for cuenta in cuentas_tipo_4)
+        total_costos = sum(cuenta.debe - cuenta.haber for cuenta in cuentas_tipo_6)
+
+        ### Determina las cantidades de interés y utilidad neta
+        utilidad_bruta = total_ingresos - total_costos
+        if utilidad_bruta < 0:
+            impuesto = 0
+        else:
+            impuesto = utilidad_bruta * tasa_impuesto
+
+        utilidad_neta = utilidad_bruta - impuesto
+
+        return utilidad_neta  # Devuelve el estado_resultados
+
+    def estado_resultados(self, tasa_impuesto: float) -> str:
+        """
+        Calcula la utilidad operacional y genera un estado de resultados.
+
+        :param tasa_impuesto: Tasa porcentual de impuesto (por ejemplo, 0.3 para 30%).
+        :return: Estado de resultados en formato de texto.
+        """
+        total_ingresos = 0
+        total_costos = 0
+
+        # Filtra las cuentas por tipo de una vez
+        cuentas_tipo_4 = [
+            cuenta for cuenta in self.cuentas.values() if cuenta.tipo == 4
+        ]
+        cuentas_tipo_6 = [
+            cuenta for cuenta in self.cuentas.values() if cuenta.tipo == 6
+        ]
+
+        # Suma los ingresos y costos
+        total_ingresos = sum(cuenta.haber - cuenta.debe for cuenta in cuentas_tipo_4)
+        total_costos = sum(cuenta.debe - cuenta.haber for cuenta in cuentas_tipo_6)
+
+        ### Determina las cantidades de interés y utilidad neta
+        utilidad_bruta = total_ingresos - total_costos
+        if utilidad_bruta < 0:
+            impuesto = 0
+        else:
+            impuesto = utilidad_bruta * tasa_impuesto
+
+        utilidad_neta = utilidad_bruta - impuesto
+
+        # Generar el estado de resultados
+        estado_resultados = (
+            f"Ingresos Totales: {total_ingresos}\n"
+            f"Costos Totales: {total_costos}\n"
+            f"Utilidad Bruta: {utilidad_bruta}\n"
+            f"Impuesto ({tasa_impuesto * 100}%): {impuesto}\n"
+            f"Utilidad Neta: {utilidad_neta}\n"
+        )
+
+        return print(estado_resultados)  # Devuelve el estado_resultados
 
 
 ### ---------------------- Clase Good ------------------------------
@@ -140,119 +276,6 @@ class BienFinal(Good):
 # -------------- Clase Libro Contable
 
 
-class LibroContable:
-    def __init__(self, plantillas_cuentas: Dict, plantillas_transacciones: Dict):
-        self.plantillas_transacciones = plantillas_transacciones
-        self.cuentas = {}
-
-        for codigo, plantilla in plantillas_cuentas.items():
-            cuenta_nombre = plantilla["cuenta"]
-            codigo_tipo_cuenta = plantilla["codigo_tipo_cuenta"]
-            # Creamos una nueva instancia de Account para cada cuenta del agente
-            self.cuentas[codigo] = Account(name=cuenta_nombre, tipo=codigo_tipo_cuenta)
-
-    def get_account_by_name(self, account_name: str) -> Optional["Account"]:
-        """
-        Obtiene una cuenta por su nombre.
-
-        :param account_name: El nombre de la cuenta a buscar.
-        :return: La cuenta encontrada o None si no existe.
-        """
-        for cuenta in self.cuentas.values():
-            if cuenta.name == account_name:
-                return cuenta
-        return None
-
-    def get_account_by_code(self, account_code: str) -> Optional["Account"]:
-        """
-        Obtiene una cuenta por su código.
-
-        :param account_code: El código de la cuenta a buscar.
-        :return: La cuenta encontrada o None si no existe.
-        """
-        return self.cuentas.get(int(account_code), None)
-
-    def debitar_cuenta(self, cuenta_codigo: str, monto: float):
-        """
-        Debita una cuenta del agente.
-
-        :param cuenta_codigo: Código de la cuenta a debitar.
-        :param monto: Monto a debitar de la cuenta.
-        """
-        cuenta = self.get_account_by_code(cuenta_codigo)
-        cuenta.registrar_transaccion(monto, 0)
-
-    def acreditar_cuenta(self, cuenta_codigo: str, monto: float):
-        """
-        Acredita una cuenta del agente.
-
-        :param cuenta_codigo: Código de la cuenta a acreditar.
-        """
-        cuenta = self.get_account_by_code(cuenta_codigo)
-        cuenta.registrar_transaccion(0, monto)
-
-    def calcular_utilidad_operacional(self, tasa_impuesto: float) -> str:
-        """
-        Calcula la utilidad operacional y genera un estado de resultados.
-
-        :param tasa_impuesto: Tasa porcentual de impuesto (por ejemplo, 0.3 para 30%).
-        :return: Estado de resultados en formato de texto.
-        """
-        total_ingresos = 0
-        total_costos = 0
-
-        for cuenta in self.cuentas.values():
-            if cuenta.tipo == 4:
-                # Las cuentas tipo 4 (Ingresos) aumentan con el haber
-                saldo = cuenta.haber - cuenta.debe
-                total_ingresos += saldo
-            elif cuenta.tipo == 6:
-                # Las cuentas tipo 6 (Costos) aumentan con el debe
-                saldo = cuenta.debe - cuenta.haber
-                total_costos += saldo
-
-        utilidad_bruta = total_ingresos - total_costos
-        impuesto = utilidad_bruta * tasa_impuesto
-        utilidad_neta = utilidad_bruta - impuesto
-
-        return utilidad_neta  # Devuelve el estado_resultados
-
-    def estado_resultados(self, tasa_impuesto: float) -> str:
-        """
-        Calcula la utilidad operacional y genera un estado de resultados.
-
-        :param tasa_impuesto: Tasa porcentual de impuesto (por ejemplo, 0.3 para 30%).
-        :return: Estado de resultados en formato de texto.
-        """
-        total_ingresos = 0
-        total_costos = 0
-
-        for cuenta in self.cuentas.values():
-            if cuenta.tipo == 4:
-                # Las cuentas tipo 4 (Ingresos) aumentan con el haber
-                saldo = cuenta.haber - cuenta.debe
-                total_ingresos += saldo
-            elif cuenta.tipo == 6:
-                # Las cuentas tipo 6 (Costos) aumentan con el debe
-                saldo = cuenta.debe - cuenta.haber
-                total_costos += saldo
-
-        utilidad_bruta = total_ingresos - total_costos
-        impuesto = utilidad_bruta * tasa_impuesto
-        utilidad_neta = utilidad_bruta - impuesto
-
-        # Generar el estado de resultados
-        estado_resultados = (
-            f"Ingresos Totales: {total_ingresos}\n"
-            f"Costos Totales: {total_costos}\n"
-            f"Utilidad Bruta: {utilidad_bruta}\n"
-            f"Impuesto ({tasa_impuesto * 100}%): {impuesto}\n"
-            f"Utilidad Neta: {utilidad_neta}\n"
-        )
-
-        return estado_resultados  # Devuelve el estado_resultados
-
-
 # -------------- Clase Agente ----------------
 
 
@@ -302,14 +325,36 @@ class Agent(ABC):
 
 # Subclase para empresas ZF
 class ZF(Agent):
+    def get_tasa_impuesto(self):
+        return 0.2
+
     def get_type(self) -> str:
         return "ZF"
+
+    def calcular_utilidad_operacional(self):
+        return self.libro_contable.calcular_utilidad_operacional(
+            self.get_tasa_impuesto()
+        )
+
+    def generar_estado_resultados(self):
+        return self.libro_contable.estado_resultados(self.get_tasa_impuesto())
 
 
 # Subclase para empresas NCT
 class NCT(Agent):
+    def get_tasa_impuesto(self):
+        return 0.35
+
     def get_type(self) -> str:
         return "NCT"
+
+    def calcular_utilidad_operacional(self):
+        return self.libro_contable.calcular_utilidad_operacional(
+            self.get_tasa_impuesto()
+        )
+
+    def generar_estado_resultados(self):
+        return self.libro_contable.estado_resultados(self.get_tasa_impuesto())
 
 
 class Market(Agent):
@@ -509,26 +554,36 @@ class Transaccion:
         # Obtener la plantilla de venta para el tipo de bien
         plantilla = obtener_plantilla_venta(vendedor, tipo_bien)
 
+        debitos = []
+        creditos = []
+
         # Procesar la plantilla, reemplazando 'precio' y 'costo' por los argumentos proporcionados
         for cuenta, variable in plantilla.get("debito", []):
             if variable == "precio":
                 valor = precio
-                vendedor.libro_contable.debitar_cuenta(cuenta, valor)
             elif variable == "costo":
                 valor = costo
-                vendedor.libro_contable.debitar_cuenta(cuenta, valor)
             else:
                 raise ValueError(f"Variable desconocida '{variable}' en débito")
+
+            debitos.append((cuenta, valor))
 
         for cuenta, variable in plantilla.get("credito", []):
             if variable == "precio":
                 valor = precio
-                vendedor.libro_contable.acreditar_cuenta(cuenta, valor)
             elif variable == "costo":
                 valor = costo
-                vendedor.libro_contable.acreditar_cuenta(cuenta, valor)
             else:
                 raise ValueError(f"Variable desconocida '{variable}' en crédito")
+            creditos.append((cuenta, valor))
+
+        # Actualizar las cuentas del vendedor con los nuevos debitos y creditos
+        # Actualizar las cuentas contables del agente
+        for cuenta_codigo, valor in debitos:
+            vendedor.libro_contable.debitar_cuenta(cuenta_codigo, valor)
+
+        for cuenta_codigo, valor in creditos:
+            vendedor.libro_contable.acreditar_cuenta(cuenta_codigo, valor)
 
 
 # ------------------------------------- Clase Produccion ---------------------------------------
