@@ -150,10 +150,8 @@ class LibroContable:
 
         ### Determina las cantidades de interés y utilidad neta
         utilidad_bruta = total_ingresos - total_costos
-        if utilidad_bruta < 0:
-            impuesto = 0
-        else:
-            impuesto = utilidad_bruta * tasa_impuesto
+
+        impuesto = utilidad_bruta * tasa_impuesto
 
         utilidad_neta = utilidad_bruta - impuesto
 
